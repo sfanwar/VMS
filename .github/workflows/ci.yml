@@ -117,7 +117,7 @@ jobs:
       - name: Build and start the stack
         run: |
           cp .env.example .env
-          docker-compose up -d --build
+          docker compose up -d --build
           # Wait for healthchecks
           echo "Waiting for stack…"
           for i in {1..60}; do
@@ -129,7 +129,7 @@ jobs:
           done
 
       - name: Seed test users
-        run: docker-compose exec -T auth-service npm run seed
+        run: docker compose exec -T auth-service node dist/seed.js
 
       - name: Use Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
@@ -158,11 +158,11 @@ jobs:
 
       - name: Dump docker logs on failure
         if: failure()
-        run: docker-compose logs --tail=200
+        run: docker compose logs --tail=200
 
       - name: Tear down
         if: always()
-        run: docker-compose down -v
+        run: docker compose down -v
 
   # ──────────────────────────────────────────────────────
   # Security scans

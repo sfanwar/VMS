@@ -56,9 +56,11 @@ app.use(cors({
 }));
 
 // Rate limit — 100 req/min/IP
+// `limit` is the canonical option in express-rate-limit v7+/v8 (replaces the
+// deprecated `max`).
 app.use(rateLimit({
   windowMs: 60_000,
-  max: 100,
+  limit: 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { errorCode: 'RATE_LIMITED', message: 'Too many requests' },
