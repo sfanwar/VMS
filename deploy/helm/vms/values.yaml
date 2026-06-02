@@ -1,0 +1,185 @@
+# ─────────────────────────────────────────────────────────
+# Default values for the VMS Helm chart.
+# Override per-environment with `-f values-prod.yaml`.
+# ─────────────────────────────────────────────────────────
+
+global:
+  imageRegistry: ghcr.io
+  imageRepository: REPLACE-OWNER/vms
+  imageTag: latest
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets: []
+
+  # Set to true in production to use external Postgres / Redis / object store
+  externalPostgres: false
+  externalRedis: false
+  externalObjectStore: false
+  externalSmtp: false
+
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    fsGroup: 1000
+
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities: { drop: [ALL] }
+
+# ─── Backend services ─────────────────────────────────────
+
+services:
+  auth:
+    name: auth-service
+    port: 3001
+    replicas: 2
+    resources:
+      requests: { cpu: 50m,  memory: 128Mi }
+      limits:   { cpu: 1,    memory: 512Mi }
+
+  user:
+    name: user-service
+    port: 3002
+    replicas: 2
+    resources:
+      requests: { cpu: 50m,  memory: 128Mi }
+      limits:   { cpu: 1,    memory: 512Mi }
+
+  request:
+    name: request-service
+    port: 3003
+    replicas: 2
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits:   { cpu: 1,    memory: 1Gi }
+
+  workflow:
+    name: workflow-service
+    port: 3004
+    replicas: 3            # Hot path — bumped for safety
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits:   { cpu: 1,    memory: 1Gi }
+
+  document:
+    name: document-service
+    port: 3005
+    replicas: 2
+    resources:
+      requests: { cpu: 50m,  memory: 256Mi }
+      limits:   { cpu: 1,    memory: 1Gi }
+
+  notification:
+    name: notification-service
+    port: 3006
+    replicas: 1
+    resources:
+      requests: { cpu: 30m,  memory: 128Mi }
+      limits:   { cpu: 500m, memory: 512Mi }
+
+  gateway:
+    name: api-gateway
+    port: 3000
+    replicas: 3            # Edge — over-provisioned
+    resources:
+      requests: { cpu: 100m, memory: 128Mi }
+      limits:   { cpu: 1,    memory: 512Mi }
+
+  reporting:
+    name: reporting-service
+    port: 3007
+    replicas: 1
+    resources:
+      requests: { cpu: 50m,  memory: 256Mi }
+      limits:   { cpu: 1,    memory: 1Gi }
+
+# ─── Frontend ─────────────────────────────────────────────
+
+frontend:
+  enabled: true
+  name: frontend
+  port: 80
+  replicas: 2
+  resources:
+    requests: { cpu: 10m,  memory: 32Mi }
+    limits:   { cpu: 200m, memory: 128Mi }
+
+# ─── Infrastructure (when not external) ───────────────────
+
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  storage: 20Gi
+  storageClass: ""        # use default if blank
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits:   { cpu: 2,    memory: 2Gi }
+
+redis:
+  enabled: true
+  image: redis:7-alpine
+  resources:
+    requests: { cpu: 50m,  memory: 64Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+
+minio:
+  enabled: true
+  image: minio/minio:latest
+  storage: 50Gi
+  storageClass: ""
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 1,    memory: 1Gi }
+
+mailhog:
+  enabled: true            # Dev only — set false in production
+  image: mailhog/mailhog:latest
+
+# ─── Ingress ──────────────────────────────────────────────
+
+ingress:
+  enabled: true
+  className: nginx
+  host: vms.example.gov
+  tls:
+    enabled: true
+    secretName: vms-tls
+    issuer: letsencrypt-prod
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+
+# ─── Secrets (override with --set / -f) ───────────────────
+# In real deployments, set `secrets.create: false` and provision via External Secrets Operator.
+
+secrets:
+  create: true
+  jwtSecret: "REPLACE-WITH-64-CHAR-RANDOM"
+  internalApiKey: "REPLACE-WITH-INTERNAL-KEY"
+  postgresUser: visa_admin
+  postgresPassword: "REPLACE"
+  postgresDb: visa_management
+  redisPassword: "REPLACE"
+  minioRootUser: "REPLACE"
+  minioRootPassword: "REPLACE"
+
+# ─── Network policies ─────────────────────────────────────
+
+networkPolicies:
+  enabled: true
+
+# ─── Migration job ────────────────────────────────────────
+
+migrations:
+  enabled: true
+  image: ghcr.io/REPLACE-OWNER/vms-auth-service:latest
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 1,    memory: 512Mi }
+
+# ─── Autoscaling (off by default; enable per env) ─────────
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70

@@ -1,0 +1,186 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ──────────────────────────────────────────────────────
+  # Lint + unit tests per service (matrix for parallelism)
+  # ──────────────────────────────────────────────────────
+  test-services:
+    name: Test ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - auth-service
+          - user-service
+          - request-service
+          - workflow-service
+          # document-service, notification-service tested in integration job
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: visa_admin
+          POSTGRES_PASSWORD: change-me-postgres
+          POSTGRES_DB: visa_management
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U visa_admin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: services/${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: services/${{ matrix.service }}/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Run tests with coverage
+        run: npm test -- --coverage --passWithNoTests
+        env:
+          DATABASE_URL: postgres://visa_admin:change-me-postgres@localhost:5432/visa_management
+          JWT_SECRET: test-secret-for-ci-only-do-not-use-in-prod-1234567890
+          NODE_ENV: test
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.service }}
+          path: services/${{ matrix.service }}/coverage/
+          retention-days: 7
+
+  # ──────────────────────────────────────────────────────
+  # Frontend build + typecheck
+  # ──────────────────────────────────────────────────────
+  test-frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci || npm install
+
+      - name: Typecheck + build
+        run: npm run build
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 7
+
+  # ──────────────────────────────────────────────────────
+  # Integration / E2E against full docker-compose stack
+  # ──────────────────────────────────────────────────────
+  e2e:
+    name: End-to-end (Playwright)
+    runs-on: ubuntu-latest
+    needs: [test-services, test-frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and start the stack
+        run: |
+          cp .env.example .env
+          docker-compose up -d --build
+          # Wait for healthchecks
+          echo "Waiting for stack…"
+          for i in {1..60}; do
+            if curl -sf http://localhost:3000/health > /dev/null \
+               && curl -sf http://localhost:3001/health > /dev/null; then
+              echo "Stack is up"; break
+            fi
+            sleep 3
+          done
+
+      - name: Seed test users
+        run: docker-compose exec -T auth-service npm run seed
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install E2E deps
+        working-directory: e2e
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+
+      - name: Run E2E
+        working-directory: e2e
+        run: npm test
+        env:
+          E2E_BASE_URL: http://localhost:3000
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 14
+
+      - name: Dump docker logs on failure
+        if: failure()
+        run: docker-compose logs --tail=200
+
+      - name: Tear down
+        if: always()
+        run: docker-compose down -v
+
+  # ──────────────────────────────────────────────────────
+  # Security scans
+  # ──────────────────────────────────────────────────────
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: gitleaks (secret detection)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: npm audit (all services)
+        run: |
+          for d in services/*/ frontend/; do
+            echo "→ Auditing $d"
+            (cd "$d" && (npm audit --audit-level=high --omit=dev || true))
+          done

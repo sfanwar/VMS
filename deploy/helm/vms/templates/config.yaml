@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vms-config
+  labels:
+    {{- include "vms.labels" (dict "name" "vms-config" "Release" .Release "Chart" .Chart) | nindent 4 }}
+data:
+  NODE_ENV: "production"
+
+  DATABASE_SCHEMA_AUTH:          "auth"
+  DATABASE_SCHEMA_USERS:         "users"
+  DATABASE_SCHEMA_REQUESTS:      "requests"
+  DATABASE_SCHEMA_WORKFLOW:      "workflow"
+  DATABASE_SCHEMA_DOCUMENTS:     "documents"
+  DATABASE_SCHEMA_NOTIFICATIONS: "notifications"
+
+  AUTH_SERVICE_URL:          "http://{{ .Values.services.auth.name }}:{{ .Values.services.auth.port }}"
+  USER_SERVICE_URL:          "http://{{ .Values.services.user.name }}:{{ .Values.services.user.port }}"
+  REQUEST_SERVICE_URL:       "http://{{ .Values.services.request.name }}:{{ .Values.services.request.port }}"
+  WORKFLOW_SERVICE_URL:      "http://{{ .Values.services.workflow.name }}:{{ .Values.services.workflow.port }}"
+  DOCUMENT_SERVICE_URL:      "http://{{ .Values.services.document.name }}:{{ .Values.services.document.port }}"
+  NOTIFICATION_SERVICE_URL:  "http://{{ .Values.services.notification.name }}:{{ .Values.services.notification.port }}"
+  REPORTING_SERVICE_URL:     "http://{{ .Values.services.reporting.name }}:{{ .Values.services.reporting.port }}"
+
+  JWT_EXPIRES_IN:         "15m"
+  JWT_REFRESH_EXPIRES_IN: "7d"
+
+  {{- if .Values.minio.enabled }}
+  MINIO_ENDPOINT: "minio"
+  {{- end }}
+  MINIO_PORT:    "9000"
+  MINIO_BUCKET:  "visa-documents"
+  MINIO_USE_SSL: "false"
+
+  {{- if .Values.mailhog.enabled }}
+  SMTP_HOST: "mailhog"
+  SMTP_PORT: "1025"
+  {{- end }}
+  SMTP_FROM: "noreply@vms.fad.local"
+{{- if .Values.secrets.create }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vms-secrets
+type: Opaque
+stringData:
+  JWT_SECRET:          {{ .Values.secrets.jwtSecret | quote }}
+  INTERNAL_API_KEY:    {{ .Values.secrets.internalApiKey | quote }}
+  POSTGRES_USER:       {{ .Values.secrets.postgresUser | quote }}
+  POSTGRES_PASSWORD:   {{ .Values.secrets.postgresPassword | quote }}
+  POSTGRES_DB:         {{ .Values.secrets.postgresDb | quote }}
+  DATABASE_URL:        {{ printf "postgres://%s:%s@postgres:5432/%s" .Values.secrets.postgresUser .Values.secrets.postgresPassword .Values.secrets.postgresDb | quote }}
+  REDIS_PASSWORD:      {{ .Values.secrets.redisPassword | quote }}
+  MINIO_ROOT_USER:     {{ .Values.secrets.minioRootUser | quote }}
+  MINIO_ROOT_PASSWORD: {{ .Values.secrets.minioRootPassword | quote }}
+  MINIO_ACCESS_KEY:    {{ .Values.secrets.minioRootUser | quote }}
+  MINIO_SECRET_KEY:    {{ .Values.secrets.minioRootPassword | quote }}
+{{- end }}

@@ -1,0 +1,70 @@
+# ─────────────────────────────────────────────────────────
+# Namespace + shared config
+# ─────────────────────────────────────────────────────────
+# Apply with: kubectl apply -f deploy/k8s/
+# Order matters: namespace → secrets → configmap → infra → services → ingress
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vms
+  labels:
+    name: vms
+    classification: confidential
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vms-config
+  namespace: vms
+data:
+  NODE_ENV: "production"
+  DATABASE_SCHEMA_AUTH:          "auth"
+  DATABASE_SCHEMA_USERS:         "users"
+  DATABASE_SCHEMA_REQUESTS:      "requests"
+  DATABASE_SCHEMA_WORKFLOW:      "workflow"
+  DATABASE_SCHEMA_DOCUMENTS:     "documents"
+  DATABASE_SCHEMA_NOTIFICATIONS: "notifications"
+
+  AUTH_SERVICE_URL:          "http://auth-service:3001"
+  USER_SERVICE_URL:          "http://user-service:3002"
+  REQUEST_SERVICE_URL:       "http://request-service:3003"
+  WORKFLOW_SERVICE_URL:      "http://workflow-service:3004"
+  DOCUMENT_SERVICE_URL:      "http://document-service:3005"
+  NOTIFICATION_SERVICE_URL:  "http://notification-service:3006"
+  REPORTING_SERVICE_URL:     "http://reporting-service:3007"
+
+  JWT_EXPIRES_IN:         "15m"
+  JWT_REFRESH_EXPIRES_IN: "7d"
+
+  MINIO_ENDPOINT: "minio.vms.svc.cluster.local"
+  MINIO_PORT:     "9000"
+  MINIO_BUCKET:   "visa-documents"
+  MINIO_USE_SSL:  "false"
+
+  SMTP_HOST: "mailhog.vms.svc.cluster.local"
+  SMTP_PORT: "1025"
+  SMTP_FROM: "noreply@vms.fad.local"
+---
+# IMPORTANT: this is a template. In production, populate via:
+#   - kubectl create secret generic vms-secrets ... --from-literal=...
+#   - or external-secrets-operator pulling from Vault/AWS SM/Azure KV
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vms-secrets
+  namespace: vms
+type: Opaque
+stringData:
+  # ⚠️ REPLACE EVERY VALUE BEFORE APPLYING
+  JWT_SECRET:           "REPLACE-WITH-64-CHAR-RANDOM-STRING"
+  INTERNAL_API_KEY:     "REPLACE-WITH-INTERNAL-SHARED-KEY"
+  POSTGRES_USER:        "visa_admin"
+  POSTGRES_PASSWORD:    "REPLACE-WITH-STRONG-PASSWORD"
+  POSTGRES_DB:          "visa_management"
+  DATABASE_URL:         "postgres://visa_admin:REPLACE@postgres.vms.svc.cluster.local:5432/visa_management"
+  REDIS_PASSWORD:       "REPLACE-WITH-STRONG-REDIS-PASSWORD"
+  MINIO_ROOT_USER:      "REPLACE"
+  MINIO_ROOT_PASSWORD:  "REPLACE"
+  MINIO_ACCESS_KEY:     "REPLACE"
+  MINIO_SECRET_KEY:     "REPLACE"

@@ -1,0 +1,62 @@
+# reporting-service — Deployment + Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: reporting-service
+  namespace: vms
+  labels: { app: reporting-service }
+spec:
+  ports: [{ port: 3007, targetPort: 3007, name: http }]
+  selector: { app: reporting-service }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: reporting-service
+  namespace: vms
+  labels: { app: reporting-service, tier: backend }
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels: { app: reporting-service }
+  template:
+    metadata:
+      labels: { app: reporting-service, tier: backend }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: reporting-service
+          image: ghcr.io/REPLACE-OWNER/vms-reporting-service:latest
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 3007, name: http }]
+          env:
+            - { name: PORT, value: "3007" }
+            - { name: NODE_ENV,       valueFrom: { configMapKeyRef: { name: vms-config, key: NODE_ENV } } }
+            - { name: DATABASE_URL,   valueFrom: { secretKeyRef:    { name: vms-secrets, key: DATABASE_URL } } }
+            - { name: JWT_SECRET,     valueFrom: { secretKeyRef:    { name: vms-secrets, key: JWT_SECRET   } } }
+            - { name: INTERNAL_API_KEY, valueFrom: { secretKeyRef:  { name: vms-secrets, key: INTERNAL_API_KEY } } }
+          envFrom:
+            - configMapRef: { name: vms-config }
+          resources:
+            requests: { cpu: "50m",   memory: "128Mi" }
+            limits:   { cpu: "1000m", memory: "512Mi" }
+          readinessProbe:
+            httpGet: { path: /health, port: 3007 }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /health, port: 3007 }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities: { drop: [ALL] }

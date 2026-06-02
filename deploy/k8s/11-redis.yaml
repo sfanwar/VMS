@@ -1,0 +1,51 @@
+# ─────────────────────────────────────────────────────────
+# Redis — Deployment (ephemeral cache; AOF disabled)
+# ─────────────────────────────────────────────────────────
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: vms
+  labels: { app: redis }
+spec:
+  ports: [{ port: 6379, targetPort: 6379, name: redis }]
+  selector: { app: redis }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: vms
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: redis }
+  template:
+    metadata:
+      labels: { app: redis }
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args:
+            - "--requirepass"
+            - "$(REDIS_PASSWORD)"
+            - "--save"
+            - ""              # disable RDB
+            - "--appendonly"
+            - "no"            # disable AOF (token cache is recreatable)
+          env:
+            - { name: REDIS_PASSWORD, valueFrom: { secretKeyRef: { name: vms-secrets, key: REDIS_PASSWORD } } }
+          ports: [{ containerPort: 6379, name: redis }]
+          resources:
+            requests: { cpu: "50m",  memory: "64Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+          livenessProbe:
+            tcpSocket: { port: 6379 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket: { port: 6379 }
+            initialDelaySeconds: 5
+            periodSeconds: 5

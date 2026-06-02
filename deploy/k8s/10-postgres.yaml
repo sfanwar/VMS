@@ -1,0 +1,65 @@
+# ─────────────────────────────────────────────────────────
+# PostgreSQL — StatefulSet with PVC
+# ─────────────────────────────────────────────────────────
+# Dev / small-prod deployment. For real production, prefer a
+# managed Postgres (RDS, Cloud SQL, Azure Database) and remove
+# this manifest entirely — point DATABASE_URL at the managed host.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: vms
+  labels: { app: postgres }
+spec:
+  clusterIP: None
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    app: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: vms
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels: { app: postgres }
+  template:
+    metadata:
+      labels: { app: postgres }
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports: [{ containerPort: 5432, name: postgres }]
+          env:
+            - { name: POSTGRES_USER,     valueFrom: { secretKeyRef: { name: vms-secrets, key: POSTGRES_USER } } }
+            - { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef: { name: vms-secrets, key: POSTGRES_PASSWORD } } }
+            - { name: POSTGRES_DB,       valueFrom: { secretKeyRef: { name: vms-secrets, key: POSTGRES_DB } } }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+          resources:
+            requests: { cpu: "250m", memory: "512Mi" }
+            limits:   { cpu: "2",    memory: "2Gi" }
+          livenessProbe:
+            exec: { command: [pg_isready, -U, "$(POSTGRES_USER)"] }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec: { command: [pg_isready, -U, "$(POSTGRES_USER)"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources: { requests: { storage: 20Gi } }

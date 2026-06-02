@@ -1,0 +1,163 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels: { app: postgres }
+spec:
+  clusterIP: None
+  ports: [{ port: 5432, targetPort: 5432, name: postgres }]
+  selector: { app: postgres }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata: { labels: { app: postgres } }
+    spec:
+      securityContext: { fsGroup: 999 }
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          ports: [{ containerPort: 5432, name: postgres }]
+          env:
+            - { name: POSTGRES_USER,     valueFrom: { secretKeyRef: { name: vms-secrets, key: POSTGRES_USER } } }
+            - { name: POSTGRES_PASSWORD, valueFrom: { secretKeyRef: { name: vms-secrets, key: POSTGRES_PASSWORD } } }
+            - { name: POSTGRES_DB,       valueFrom: { secretKeyRef: { name: vms-secrets, key: POSTGRES_DB } } }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          volumeMounts: [{ name: data, mountPath: /var/lib/postgresql/data }]
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+          readinessProbe:
+            exec: { command: [pg_isready, -U, "$(POSTGRES_USER)"] }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- if .Values.postgres.storageClass }}
+        storageClassName: {{ .Values.postgres.storageClass | quote }}
+        {{- end }}
+        resources: { requests: { storage: {{ .Values.postgres.storage }} } }
+{{- end }}
+{{- if .Values.redis.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  labels: { app: redis }
+spec:
+  ports: [{ port: 6379, targetPort: 6379, name: redis }]
+  selector: { app: redis }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: redis }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: redis } }
+  template:
+    metadata: { labels: { app: redis } }
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          args: ["--requirepass", "$(REDIS_PASSWORD)", "--save", "", "--appendonly", "no"]
+          env:
+            - { name: REDIS_PASSWORD, valueFrom: { secretKeyRef: { name: vms-secrets, key: REDIS_PASSWORD } } }
+          ports: [{ containerPort: 6379, name: redis }]
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+          readinessProbe:
+            tcpSocket: { port: 6379 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+{{- end }}
+{{- if .Values.minio.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  labels: { app: minio }
+spec:
+  ports:
+    - { name: api,     port: 9000, targetPort: 9000 }
+    - { name: console, port: 9001, targetPort: 9001 }
+  selector: { app: minio }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: minio }
+spec:
+  serviceName: minio
+  replicas: 1
+  selector: { matchLabels: { app: minio } }
+  template:
+    metadata: { labels: { app: minio } }
+    spec:
+      containers:
+        - name: minio
+          image: {{ .Values.minio.image }}
+          args: ["server", "/data", "--console-address", ":9001"]
+          env:
+            - { name: MINIO_ROOT_USER,     valueFrom: { secretKeyRef: { name: vms-secrets, key: MINIO_ROOT_USER } } }
+            - { name: MINIO_ROOT_PASSWORD, valueFrom: { secretKeyRef: { name: vms-secrets, key: MINIO_ROOT_PASSWORD } } }
+          ports:
+            - { containerPort: 9000 }
+            - { containerPort: 9001 }
+          volumeMounts: [{ name: data, mountPath: /data }]
+          resources:
+            {{- toYaml .Values.minio.resources | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /minio/health/ready, port: 9000 }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- if .Values.minio.storageClass }}
+        storageClassName: {{ .Values.minio.storageClass | quote }}
+        {{- end }}
+        resources: { requests: { storage: {{ .Values.minio.storage }} } }
+{{- end }}
+{{- if .Values.mailhog.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailhog
+  labels: { app: mailhog }
+spec:
+  ports:
+    - { name: smtp, port: 1025, targetPort: 1025 }
+    - { name: web,  port: 8025, targetPort: 8025 }
+  selector: { app: mailhog }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: mailhog }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: mailhog } }
+  template:
+    metadata: { labels: { app: mailhog } }
+    spec:
+      containers:
+        - name: mailhog
+          image: {{ .Values.mailhog.image }}
+          ports:
+            - { containerPort: 1025 }
+            - { containerPort: 8025 }
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits:   { cpu: 200m, memory: 128Mi }
+{{- end }}

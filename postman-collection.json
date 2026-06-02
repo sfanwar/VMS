@@ -1,0 +1,329 @@
+{
+  "info": {
+    "name": "Visa Management System",
+    "description": "All endpoints, organized by service. Login first to populate {{accessToken}} and {{refreshToken}}.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "vms-collection-2026"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "event": [],
+  "variable": [
+    { "key": "baseUrl",      "value": "http://localhost:3000" },
+    { "key": "accessToken",  "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "requestId",    "value": "" },
+    { "key": "documentId",   "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (Office)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api","auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"office.user@office1.local\",\n  \"password\": \"Passw0rd!\"\n}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('accessToken', body.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', body.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (Director)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api","auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"director@fad.local\",\n  \"password\": \"Passw0rd!\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.collectionVariables.set('accessToken', body.accessToken);",
+              "  pm.collectionVariables.set('refreshToken', body.refreshToken);",
+              "}"
+            ] } }
+          ]
+        },
+        {
+          "name": "Login (Sysadmin)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api","auth","login"] },
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"sysadmin@fad.local\",\n  \"password\": \"Passw0rd!\"\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.collectionVariables.set('accessToken', body.accessToken);",
+              "  pm.collectionVariables.set('refreshToken', body.refreshToken);",
+              "}"
+            ] } }
+          ]
+        },
+        {
+          "name": "Refresh",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/refresh", "host": ["{{baseUrl}}"], "path": ["api","auth","refresh"] },
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/logout", "host": ["{{baseUrl}}"], "path": ["api","auth","logout"] },
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/change-password", "host": ["{{baseUrl}}"], "path": ["api","auth","change-password"] },
+            "description": "Change own password. newPassword must satisfy the policy: at least 12 chars with an uppercase letter, a lowercase letter, a digit, and a symbol. Revokes all refresh tokens on success.",
+            "body": { "mode": "raw", "raw": "{\n  \"currentPassword\": \"Passw0rd!\",\n  \"newPassword\": \"N3w!Str0ngPass\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users & Reference",
+      "item": [
+        { "name": "Me", "request": { "method": "GET", "url": "{{baseUrl}}/api/users/me" } },
+        {
+          "name": "Create User (Director)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api","users"] },
+            "description": "System Administrator only. Provisions the user AND login credentials. password must satisfy the policy: at least 12 chars with an uppercase letter, a lowercase letter, a digit, and a symbol. officeId is optional. (Log in as sysadmin first.)",
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"new.user@fad.local\",\n  \"password\": \"Str0ng!Passw0rd\",\n  \"fullNameEn\": \"New User\",\n  \"personaCodes\": [\"TYPIST\"]\n}" }
+          }
+        },
+        { "name": "List Personas", "request": { "method": "GET", "url": "{{baseUrl}}/api/personas" } },
+        { "name": "List Offices", "request": { "method": "GET", "url": "{{baseUrl}}/api/offices" } },
+        { "name": "List Countries", "request": { "method": "GET", "url": "{{baseUrl}}/api/reference/countries" } },
+        { "name": "List Visa Types", "request": { "method": "GET", "url": "{{baseUrl}}/api/reference/visa-types" } }
+      ]
+    },
+    {
+      "name": "Requests",
+      "item": [
+        {
+          "name": "Create Request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/requests",
+            "body": { "mode": "raw", "raw": "{\n  \"countryOfVisitId\": \"REPLACE_WITH_COUNTRY_UUID\",\n  \"visaTypeId\":      \"REPLACE_WITH_VISATYPE_UUID\",\n  \"numberOfPassengers\": 2,\n  \"beneficiaries\": [\n    { \"fullNameEn\": \"Alice Example\" },\n    { \"fullNameEn\": \"Bob Example\" }\n  ]\n}" }
+          },
+          "event": [
+            { "listen": "test", "script": { "type": "text/javascript", "exec": [
+              "if (pm.response.code === 201) {",
+              "  pm.collectionVariables.set('requestId', pm.response.json().id);",
+              "}"
+            ] } }
+          ]
+        },
+        { "name": "List Requests",    "request": { "method": "GET",   "url": "{{baseUrl}}/api/requests" } },
+        { "name": "List by Status",   "request": { "method": "GET",   "url": "{{baseUrl}}/api/requests?status=SUBMITTED" } },
+        { "name": "Get Request",      "request": { "method": "GET",   "url": "{{baseUrl}}/api/requests/{{requestId}}" } },
+        { "name": "Update Fees",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/requests/{{requestId}}/fees",
+            "body": { "mode": "raw", "raw": "{\n  \"feesAmount\": \"500.00\",\n  \"feesCurrency\": \"AED\"\n}" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Workflow",
+      "item": [
+        {
+          "name": "Submit (DRAFT → SUBMITTED)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/workflow/transitions",
+            "body": { "mode": "raw", "raw": "{\n  \"requestId\": \"{{requestId}}\",\n  \"action\": \"SUBMIT\"\n}" }
+          }
+        },
+        {
+          "name": "Return to Office",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/workflow/transitions",
+            "body": { "mode": "raw", "raw": "{\n  \"requestId\": \"{{requestId}}\",\n  \"action\": \"RETURN_TO_OFFICE\",\n  \"comment\": \"Passport scan is blurry\"\n}" }
+          }
+        },
+        {
+          "name": "Approve (Director)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/workflow/transitions",
+            "body": { "mode": "raw", "raw": "{\n  \"requestId\": \"{{requestId}}\",\n  \"action\": \"APPROVE\"\n}" }
+          }
+        },
+        { "name": "Get History",      "request": { "method": "GET", "url": "{{baseUrl}}/api/workflow/requests/{{requestId}}/history" } },
+        { "name": "Next Actions",     "request": { "method": "GET", "url": "{{baseUrl}}/api/workflow/next-actions?status=DIRECTOR_REVIEW" } },
+        { "name": "Full State Machine","request": { "method": "GET", "url": "{{baseUrl}}/api/workflow/state-machine" } }
+      ]
+    },
+    {
+      "name": "Documents",
+      "item": [
+        {
+          "name": "Upload Document",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/documents/upload",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file",       "type": "file",   "src": [] },
+                { "key": "requestId",  "type": "text",   "value": "{{requestId}}" },
+                { "key": "kind",       "type": "text",   "value": "OFFICE_LETTER" }
+              ]
+            }
+          }
+        },
+        { "name": "List for Request", "request": { "method": "GET", "url": "{{baseUrl}}/api/documents?requestId={{requestId}}" } },
+        { "name": "Download",         "request": { "method": "GET", "url": "{{baseUrl}}/api/documents/{{documentId}}/download" } },
+        { "name": "Delete",           "request": { "method": "DELETE", "url": "{{baseUrl}}/api/documents/{{documentId}}" } }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Send Action Email",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/notifications/email",
+            "body": { "mode": "raw", "raw": "{\n  \"requestId\": \"{{requestId}}\",\n  \"to\":   [\"office.user@office1.local\"],\n  \"cc\":   [\"senior.admin@fad.local\"],\n  \"subject\": \"Please correct attached documents\",\n  \"bodyText\": \"Your request requires the following corrections...\"\n}" }
+          }
+        },
+        { "name": "List Emails for Request", "request": { "method": "GET", "url": "{{baseUrl}}/api/notifications/emails?requestId={{requestId}}" } },
+        { "name": "In-app Feed",             "request": { "method": "GET", "url": "{{baseUrl}}/api/notifications/in-app/mine" } }
+      ]
+    },
+    {
+      "name": "Reporting",
+      "item": [
+        { "name": "Dashboard",          "request": { "method": "GET", "url": "{{baseUrl}}/api/reporting/dashboard" } },
+        { "name": "Turnaround",         "request": { "method": "GET", "url": "{{baseUrl}}/api/reporting/turnaround?days=90" } },
+        { "name": "Office Performance", "request": { "method": "GET", "url": "{{baseUrl}}/api/reporting/office-performance?days=90" } },
+        { "name": "Workload",           "request": { "method": "GET", "url": "{{baseUrl}}/api/reporting/workload" } },
+        { "name": "Bottlenecks",        "request": { "method": "GET", "url": "{{baseUrl}}/api/reporting/bottlenecks?days=90" } },
+        { "name": "Audit Search",       "request": { "method": "GET", "url": "{{baseUrl}}/api/reporting/audit?limit=50" } },
+        { "name": "My Office",          "request": { "method": "GET", "url": "{{baseUrl}}/api/reporting/my-office" } }
+      ]
+    },
+    {
+      "name": "Admin (SYSADMIN)",
+      "description": "System Administrator endpoints. Log in as sysadmin@fad.local first.",
+      "item": [
+        { "name": "List Users", "request": { "method": "GET", "url": "{{baseUrl}}/api/users" } },
+        {
+          "name": "Update User (deactivate)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/users/REPLACE_WITH_USER_UUID",
+            "body": { "mode": "raw", "raw": "{\n  \"isActive\": false\n}" }
+          }
+        },
+        {
+          "name": "Update User (roles)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/users/REPLACE_WITH_USER_UUID",
+            "body": { "mode": "raw", "raw": "{\n  \"personaCodes\": [\"TYPIST\", \"SENIOR_OFFICER\"]\n}" }
+          }
+        },
+        {
+          "name": "Reset User Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/users/REPLACE_WITH_USER_UUID/reset-password",
+            "body": { "mode": "raw", "raw": "{\n  \"password\": \"N3w!Str0ngPass\"\n}" }
+          }
+        },
+        { "name": "List Offices (incl. inactive)", "request": { "method": "GET", "url": "{{baseUrl}}/api/offices/all" } },
+        {
+          "name": "Create Office",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/offices",
+            "body": { "mode": "raw", "raw": "{\n  \"nameEn\": \"New Office\",\n  \"nameAr\": \"مكتب جديد\",\n  \"authorizedPerson\": \"Jane Doe\",\n  \"telephoneNumber\": \"+971-4-0000000\"\n}" }
+          }
+        },
+        {
+          "name": "Add Office Contact",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/offices/REPLACE_WITH_OFFICE_UUID/contacts",
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Second Contact\",\n  \"telephoneNumber\": \"+971-4-0000001\",\n  \"isPrimary\": false\n}" }
+          }
+        },
+        {
+          "name": "Add Country",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/reference/countries",
+            "body": { "mode": "raw", "raw": "{\n  \"isoCode\": \"ES\",\n  \"nameEn\": \"Spain\",\n  \"nameAr\": \"إسبانيا\"\n}" }
+          }
+        },
+        {
+          "name": "Add Visa Type",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/api/reference/visa-types",
+            "body": { "mode": "raw", "raw": "{\n  \"code\": \"STUDENT\",\n  \"nameEn\": \"Student Visa\",\n  \"nameAr\": \"تأشيرة طالب\"\n}" }
+          }
+        }
+      ]
+    }
+  ]
+}

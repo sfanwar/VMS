@@ -1,0 +1,83 @@
+{{- range $key, $svc := .Values.services }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $svc.name }}
+  labels:
+    app: {{ $svc.name }}
+    tier: backend
+spec:
+  ports:
+    - port: {{ $svc.port }}
+      targetPort: {{ $svc.port }}
+      name: http
+  selector:
+    app: {{ $svc.name }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $svc.name }}
+  labels:
+    app: {{ $svc.name }}
+    tier: backend
+spec:
+  replicas: {{ $svc.replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: {{ $svc.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ $svc.name }}
+        tier: backend
+    spec:
+      {{- with $.Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml $.Values.global.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $svc.name }}
+          image: {{ include "vms.image" (dict "name" $svc.name "Values" $.Values) }}
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+          ports:
+            - { containerPort: {{ $svc.port }}, name: http }
+          env:
+            - { name: PORT, value: "{{ $svc.port }}" }
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: vms-secrets, key: DATABASE_URL } }
+            - name: JWT_SECRET
+              valueFrom: { secretKeyRef: { name: vms-secrets, key: JWT_SECRET } }
+            - name: INTERNAL_API_KEY
+              valueFrom: { secretKeyRef: { name: vms-secrets, key: INTERNAL_API_KEY } }
+            - name: REDIS_PASSWORD
+              valueFrom: { secretKeyRef: { name: vms-secrets, key: REDIS_PASSWORD } }
+            - name: MINIO_ACCESS_KEY
+              valueFrom: { secretKeyRef: { name: vms-secrets, key: MINIO_ACCESS_KEY } }
+            - name: MINIO_SECRET_KEY
+              valueFrom: { secretKeyRef: { name: vms-secrets, key: MINIO_SECRET_KEY } }
+          envFrom:
+            - configMapRef: { name: vms-config }
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          readinessProbe:
+            httpGet: { path: /health, port: {{ $svc.port }} }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /health, port: {{ $svc.port }} }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+          securityContext:
+            {{- include "vms.containerSecurityContext" $ | nindent 12 }}
+{{- end }}

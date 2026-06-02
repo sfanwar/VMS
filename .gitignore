@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+build/
+**/dist/
+**/build/
+
+# Environment files — NEVER commit
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test coverage
+coverage/
+**/coverage/
+.nyc_output/
+
+# Database dumps
+*.sql.backup
+*.dump
+
+# OS
+Thumbs.db
+
+# Uploaded files (legacy — we use MinIO now)
+uploads/
+
+# Frontend
+frontend/.vite/
+frontend/dist/

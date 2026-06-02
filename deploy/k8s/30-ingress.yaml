@@ -1,0 +1,40 @@
+# ─────────────────────────────────────────────────────────
+# Ingress — public-facing routing
+# ─────────────────────────────────────────────────────────
+# Prerequisites: an ingress controller (nginx, traefik, etc.)
+# and cert-manager for TLS certificates.
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vms-ingress
+  namespace: vms
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"           # document uploads
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/server-snippet: |
+      # Block direct access to internal endpoints at perimeter
+      location ~ /internal/ { return 404; }
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [vms.example.gov]
+      secretName: vms-tls
+  rules:
+    - host: vms.example.gov
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port: { number: 3000 }
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port: { number: 80 }
