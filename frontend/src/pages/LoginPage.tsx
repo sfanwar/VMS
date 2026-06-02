@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { useTranslation } from '../lib/i18n';
 
@@ -19,8 +19,8 @@ export default function LoginPage() {
   const { login } = useAuth();
   const { t, lang, setLang } = useTranslation();
   const nav = useNavigate();
-  const loc = useLocation();
-  const from = (loc.state as any)?.from ?? '/requests';
+  // After signing in, always land on the requests page (don't resume the last
+  // page the user was on before logging out).
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -40,7 +40,7 @@ export default function LoginPage() {
     setBusy(true);
     try {
       await login(email, password);
-      nav(from, { replace: true });
+      nav('/requests', { replace: true });
     } catch (e: any) {
       const code = e?.errorCode;
       // Try to map a backend error code; fall back to message; fall back to a generic string.
