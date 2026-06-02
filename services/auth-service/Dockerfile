@@ -1,5 +1,5 @@
 # ─── Build stage ────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # ─── Runtime stage ──────────────────────────────────────────
-FROM node:20-alpine AS runtime
+FROM node:26-alpine AS runtime
 
 # Run as non-root
 RUN addgroup -S app && adduser -S app -G app
