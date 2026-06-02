@@ -541,6 +541,21 @@ table.list .empty { padding: 40px; text-align: center; color: var(--ink-faint); 
 }
 .hint-accounts h4 { font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); margin-bottom: 8px; font-family: var(--font-mono); font-weight: 500; }
 .hint-accounts code { font-family: var(--font-mono); font-size: 0.82rem; background: var(--paper-deep); padding: 1px 5px; border-radius: 2px; }
+.hint-accounts .account-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.hint-accounts .account-link code { transition: background 0.12s, color 0.12s; }
+.hint-accounts .account-link:hover code,
+.hint-accounts .account-link:focus-visible code {
+  background: var(--teal);
+  color: var(--paper);
+  outline: none;
+}
 
 /* ─── Beneficiary card ────────────────────────────── */
 

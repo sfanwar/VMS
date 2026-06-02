@@ -3,6 +3,18 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { useTranslation } from '../lib/i18n';
 
+// All seeded demo accounts share this password.
+const SEED_PASSWORD = 'Passw0rd!';
+const SEEDED_ACCOUNTS: { email: string; roleKey: string }[] = [
+  { email: 'office.user@office1.local', roleKey: 'login.rolesOffice' },
+  { email: 'senior.admin@fad.local', roleKey: 'login.rolesSeniorAdmin' },
+  { email: 'senior.officer@fad.local', roleKey: 'login.rolesSeniorOfficer' },
+  { email: 'director@fad.local', roleKey: 'login.rolesDirector' },
+  { email: 'typist@fad.local', roleKey: 'login.rolesTypist' },
+  { email: 'embassy.user@embassy.local', roleKey: 'login.rolesEmbassy' },
+  { email: 'sysadmin@fad.local', roleKey: 'login.rolesSysadmin' },
+];
+
 export default function LoginPage() {
   const { login } = useAuth();
   const { t, lang, setLang } = useTranslation();
@@ -14,6 +26,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Clicking a seeded account fills the form with its email + the shared password.
+  function fillCredentials(accountEmail: string) {
+    setEmail(accountEmail);
+    setPassword(SEED_PASSWORD);
+    setErr(null);
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -106,14 +125,20 @@ export default function LoginPage() {
           </button>
 
           <div className="hint-accounts">
-            <h4>{t('login.seededHeading', { password: 'Passw0rd!' })}</h4>
-            <div><code>office.user@office1.local</code> — {t('login.rolesOffice')}</div>
-            <div><code>senior.admin@fad.local</code> — {t('login.rolesSeniorAdmin')}</div>
-            <div><code>senior.officer@fad.local</code> — {t('login.rolesSeniorOfficer')}</div>
-            <div><code>director@fad.local</code> — {t('login.rolesDirector')}</div>
-            <div><code>typist@fad.local</code> — {t('login.rolesTypist')}</div>
-            <div><code>embassy.user@embassy.local</code> — {t('login.rolesEmbassy')}</div>
-            <div><code>sysadmin@fad.local</code> — {t('login.rolesSysadmin')}</div>
+            <h4>{t('login.seededHeading', { password: SEED_PASSWORD })}</h4>
+            {SEEDED_ACCOUNTS.map((a) => (
+              <div key={a.email}>
+                <button
+                  type="button"
+                  className="account-link"
+                  onClick={() => fillCredentials(a.email)}
+                  title={t('login.fillHint')}
+                >
+                  <code>{a.email}</code>
+                </button>
+                {' — '}{t(a.roleKey)}
+              </div>
+            ))}
           </div>
         </form>
       </div>

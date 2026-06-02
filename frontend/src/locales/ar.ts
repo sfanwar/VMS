@@ -43,6 +43,7 @@ export const ar: typeof en = {
     rolesTypist: 'الكاتب',
     rolesEmbassy: 'السفارة',
     rolesSysadmin: 'مسؤول النظام',
+    fillHint: 'انقر لتعبئة نموذج تسجيل الدخول',
   },
 
   list: {

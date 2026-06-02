@@ -40,6 +40,7 @@ export const en = {
     rolesTypist: 'Typist',
     rolesEmbassy: 'Embassy',
     rolesSysadmin: 'System Administrator',
+    fillHint: 'Click to fill the sign-in form',
   },
 
   list: {
