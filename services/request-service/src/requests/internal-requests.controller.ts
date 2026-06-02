@@ -37,6 +37,7 @@ export class InternalRequestsController {
     if (!r) throw new NotFoundException();
     return {
       id: r.id,
+      requestNumber: r.requestNumber,
       status: r.status,
       officeId: r.officeId,
       createdByUserId: r.createdByUserId,

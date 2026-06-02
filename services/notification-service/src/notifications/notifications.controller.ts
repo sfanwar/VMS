@@ -3,7 +3,7 @@ import {
   UnauthorizedException, UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { ArrayMinSize, IsArray, IsEmail, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { ArrayMinSize, IsArray, IsEmail, IsInt, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -33,6 +33,8 @@ class WorkflowEventDto {
   @IsUUID() requestId!: string;
   @IsString() action!: string;
   @IsString() newStatus!: string;
+  @IsOptional() @IsString() @MaxLength(30) requestNumber?: string;
+  @IsOptional() @IsInt() beneficiaryCount?: number;
 }
 
 @ApiTags('notifications')
@@ -102,8 +104,11 @@ export class InternalNotificationsController {
       to: [fadInbox],
       templateCode: dto.action,
       templateContext: {
-        requestNumber: dto.requestId.slice(0, 8),
+        // Prefer the human-friendly reference number (e.g. VR-2026-001047);
+        // fall back to a short UUID fragment only if it wasn't supplied.
+        requestNumber: dto.requestNumber ?? dto.requestId.slice(0, 8),
         newStatus: dto.newStatus,
+        beneficiaryCount: dto.beneficiaryCount,
       },
     });
     return { queued: true };

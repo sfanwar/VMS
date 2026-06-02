@@ -102,7 +102,13 @@ export class WorkflowService {
     await this.updateRequestStatus(input.requestId, result.newStatus!);
 
     // 6. Fire-and-forget: queue notifications (best-effort)
-    this.queueNotifications(input.requestId, input.action, result.newStatus!).catch((err) => {
+    this.queueNotifications(
+      input.requestId,
+      requestSnapshot.requestNumber,
+      input.action,
+      result.newStatus!,
+      requestSnapshot.beneficiaryCount,
+    ).catch((err) => {
       this.logger.error('Failed to queue notifications', err);
     });
 
@@ -136,7 +142,7 @@ export class WorkflowService {
 
   // ───────────── Inter-service calls (HTTP) ─────────────
 
-  private async fetchRequest(requestId: string): Promise<{ status: RequestStatus; beneficiaryCount: number } | null> {
+  private async fetchRequest(requestId: string): Promise<{ status: RequestStatus; beneficiaryCount: number; requestNumber: string } | null> {
     const url = process.env.REQUEST_SERVICE_URL ?? 'http://request-service:3003';
     try {
       const res = await fetch(`${url}/api/internal/requests/${requestId}/snapshot`, {
@@ -179,7 +185,13 @@ export class WorkflowService {
     }
   }
 
-  private async queueNotifications(requestId: string, action: WorkflowAction, newStatus: RequestStatus): Promise<void> {
+  private async queueNotifications(
+    requestId: string,
+    requestNumber: string,
+    action: WorkflowAction,
+    newStatus: RequestStatus,
+    beneficiaryCount: number,
+  ): Promise<void> {
     const url = process.env.NOTIFICATION_SERVICE_URL ?? 'http://notification-service:3006';
     await fetch(`${url}/api/internal/notifications/workflow-event`, {
       method: 'POST',
@@ -187,7 +199,7 @@ export class WorkflowService {
         'Content-Type': 'application/json',
         'x-internal-key': process.env.INTERNAL_API_KEY ?? 'dev-internal-key',
       },
-      body: JSON.stringify({ requestId, action, newStatus }),
+      body: JSON.stringify({ requestId, requestNumber, action, newStatus, beneficiaryCount }),
     }).catch(() => {
       // Notifications are best-effort
     });
