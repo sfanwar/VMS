@@ -11,7 +11,12 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ${{ github.repository_owner }}/vms
+
+# Default token scopes for all jobs (each job narrows these as needed).
+# `packages: write` is required to push images to GHCR.
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build-and-push:
@@ -47,6 +52,11 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      # GHCR requires the image path to be lowercase; lowercase the owner defensively.
+      - name: Compute lowercase image prefix
+        id: img
+        run: echo "prefix=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/vms" >> "$GITHUB_OUTPUT"
+
       - name: Resolve tag
         id: tag
         run: |
@@ -72,8 +82,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ steps.tag.outputs.tag }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:latest
+            ${{ steps.img.outputs.prefix }}-${{ matrix.service }}:${{ steps.tag.outputs.tag }}
+            ${{ steps.img.outputs.prefix }}-${{ matrix.service }}:latest
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
           labels: |
@@ -94,6 +104,10 @@ jobs:
       matrix:
         service: [auth-service, user-service, request-service, workflow-service, document-service, notification-service, api-gateway, frontend]
     steps:
+      - name: Compute lowercase image prefix
+        id: img
+        run: echo "prefix=${REGISTRY}/${GITHUB_REPOSITORY_OWNER,,}/vms" >> "$GITHUB_OUTPUT"
+
       - name: Resolve tag
         id: tag
         run: |
@@ -112,12 +126,12 @@ jobs:
 
       - name: Pull image locally so Trivy can scan it
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ steps.tag.outputs.tag }}
+          docker pull ${{ steps.img.outputs.prefix }}-${{ matrix.service }}:${{ steps.tag.outputs.tag }}
 
       - name: Trivy image scan (human-readable table in workflow log)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ steps.tag.outputs.tag }}
+          image-ref: ${{ steps.img.outputs.prefix }}-${{ matrix.service }}:${{ steps.tag.outputs.tag }}
           format: table
           severity: 'CRITICAL,HIGH'
           exit-code: '0'
@@ -127,7 +141,7 @@ jobs:
         continue-on-error: true
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ steps.tag.outputs.tag }}
+          image-ref: ${{ steps.img.outputs.prefix }}-${{ matrix.service }}:${{ steps.tag.outputs.tag }}
           format: sarif
           output: trivy-${{ matrix.service }}.sarif
           severity: 'CRITICAL,HIGH'
