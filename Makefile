@@ -53,17 +53,15 @@ seed-sample: ## Seed realistic sample requests (depends on `seed` first)
 
 # ─── Tests ───────────────────────────────────────────────
 
-test: ## Run all unit tests across services
-	@for svc in auth-service user-service request-service workflow-service; do \
-		echo "$(BLUE)→ Testing $$svc$(RESET)"; \
-		docker-compose exec -T $$svc npm test || exit 1; \
-	done
+# Tests run on the host, not in the containers: the runtime images are pruned
+# (`npm prune --omit=dev`) and don't ship the `test/` dir, so jest is unavailable
+# inside them. The runner installs dev deps per service on first run (idempotent)
+# and mirrors .github/workflows/ci.yml. Windows hosts can call scripts/test.ps1.
+test: ## Run all unit tests across services (host Node; installs dev deps if missing)
+	@bash scripts/test.sh
 
-test-cov: ## Run all tests with coverage
-	@for svc in auth-service user-service request-service workflow-service; do \
-		echo "$(BLUE)→ Coverage for $$svc$(RESET)"; \
-		docker-compose exec -T $$svc npm run test:cov || exit 1; \
-	done
+test-cov: ## Run all tests with coverage (host Node)
+	@bash scripts/test.sh --coverage
 
 test-e2e: ## Run end-to-end Playwright tests (requires `up` first)
 	cd e2e && npm install && npm test

@@ -21,7 +21,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-visa_admin}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-visa_admin} -d ${POSTGRES_DB:-visa_management}"]
       interval: 5s
       timeout: 5s
       retries: 10
