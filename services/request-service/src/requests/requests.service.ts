@@ -3,7 +3,7 @@ import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { VisaRequest } from '../entities/visa-request.entity';
 import { Beneficiary } from '../entities/beneficiary.entity';
-import { CreateRequestDto, UpdateRequestDto, UpdateFeesDto, ListRequestsQueryDto } from '../dto/request.dto';
+import { CreateRequestDto, UpdateRequestDto, UpdateFeesDto, UpdateBeneficiaryVisaDto, ListRequestsQueryDto } from '../dto/request.dto';
 import { AuthenticatedUser } from '../common/guards/jwt-auth.guard';
 
 /**
@@ -12,6 +12,14 @@ import { AuthenticatedUser } from '../common/guards/jwt-auth.guard';
  * leaking the existence of FAD-internal cases.
  */
 const EMBASSY_VISIBLE_STATUSES = ['WAITING_FOR_EMBASSY', 'AT_EMBASSY'] as const;
+
+/**
+ * Stages at which the Typist may capture embassy-issued visa data. Visas are
+ * uploaded at AT_EMBASSY and the request is then worked in TYPIST_FEE_UPDATE
+ * before final review; outside these stages the visa fields are locked.
+ * Mirrors VISA_INFO_EDITABLE_STATUSES in the frontend RequestDetailPage.
+ */
+const VISA_INFO_EDITABLE_STATUSES = ['AT_EMBASSY', 'TYPIST_FEE_UPDATE'] as const;
 
 @Injectable()
 export class RequestsService {
@@ -141,6 +149,45 @@ export class RequestsService {
     request.feesUpdatedAt = new Date();
     request.feesUpdatedBy = actor.id;
     return this.requests.save(request);
+  }
+
+  /**
+   * Typist fills in embassy-issued visa data (visa number, issue date,
+   * appointment) for a single beneficiary. Persona-gated to TYPIST and scoped
+   * to a request the actor may see; only the provided fields are written so the
+   * data can be saved incrementally.
+   */
+  async updateBeneficiaryVisa(
+    requestId: string,
+    beneficiaryId: string,
+    dto: UpdateBeneficiaryVisaDto,
+    actor: AuthenticatedUser,
+  ): Promise<VisaRequest> {
+    if (!actor.personas.includes('TYPIST')) {
+      throw new ForbiddenException({ errorCode: 'INSUFFICIENT_PERMISSIONS', message: 'Only the Typist can update visa information' });
+    }
+    // Enforce visibility first (404, not 403, if the actor may not see it).
+    const request = await this.findByIdForActor(requestId, actor);
+
+    // Visa data is only editable at the embassy / fee-update stages.
+    if (!VISA_INFO_EDITABLE_STATUSES.includes(request.status as any)) {
+      throw new ConflictException({
+        errorCode: 'VISA_INFO_LOCKED',
+        message: `Visa information cannot be edited in ${request.status} state`,
+      });
+    }
+
+    const beneficiary = await this.beneficiaries.findOne({ where: { id: beneficiaryId, requestId } });
+    if (!beneficiary) {
+      throw new NotFoundException({ errorCode: 'BENEFICIARY_NOT_FOUND', message: 'Beneficiary not found on this request' });
+    }
+
+    if (dto.visaNumber !== undefined) beneficiary.visaNumber = dto.visaNumber;
+    if (dto.visaIssuedAt !== undefined) beneficiary.visaIssuedAt = dto.visaIssuedAt;
+    if (dto.appointmentAt !== undefined) beneficiary.appointmentAt = new Date(dto.appointmentAt);
+    await this.beneficiaries.save(beneficiary);
+
+    return this.findByIdForActor(requestId, actor);
   }
 
   async setStatus(id: string, newStatus: VisaRequest['status'], assigneeId?: string | null): Promise<VisaRequest> {

@@ -162,6 +162,8 @@ export const ar: typeof en = {
     feesCurrency: 'العملة',
     feesUpdate: 'تحديث الرسوم',
     feesUpdated: 'تم تحديث الرسوم',
+    visaInfoSave: 'حفظ بيانات التأشيرة',
+    visaInfoSaved: 'تم حفظ بيانات التأشيرة',
     documents: 'الوثائق',
     history: 'السجل',
     actionsSection: 'الإجراءات المتاحة',

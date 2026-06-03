@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { RequestsService } from './requests.service';
-import { CreateRequestDto, UpdateRequestDto, UpdateFeesDto, ListRequestsQueryDto } from '../dto/request.dto';
+import { CreateRequestDto, UpdateRequestDto, UpdateFeesDto, UpdateBeneficiaryVisaDto, ListRequestsQueryDto } from '../dto/request.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { PersonaGuard, RequirePersona } from '../common/guards/persona.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -54,5 +54,18 @@ export class RequestsController {
     @CurrentUser() actor: AuthenticatedUser,
   ) {
     return this.service.updateFees(id, dto, actor);
+  }
+
+  @Patch(':id/beneficiaries/:bid')
+  @UseGuards(PersonaGuard)
+  @RequirePersona('TYPIST')
+  @ApiOperation({ summary: 'Update a beneficiary visa info — number, issue date, appointment (Typist only)' })
+  updateBeneficiaryVisa(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('bid', new ParseUUIDPipe()) bid: string,
+    @Body() dto: UpdateBeneficiaryVisaDto,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    return this.service.updateBeneficiaryVisa(id, bid, dto, actor);
   }
 }

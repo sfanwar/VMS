@@ -24,6 +24,14 @@ const COMMENT_REQUIRED = new Set([
   'RETURN_TO_OFFICE', 'RETURN_FOR_CORRECTION', 'APOLOGIZE', 'REJECT',
 ]);
 
+// Stages at which the Typist captures embassy-issued visa data per beneficiary
+// (visa number, issue date, appointment). The visas are uploaded at AT_EMBASSY
+// and the request is then worked in TYPIST_FEE_UPDATE before final review.
+const VISA_INFO_EDITABLE_STATUSES = new Set(['AT_EMBASSY', 'TYPIST_FEE_UPDATE']);
+
+interface VisaDraft { visaNumber: string; visaIssuedAt: string; appointmentAt: string }
+const EMPTY_VISA_DRAFT: VisaDraft = { visaNumber: '', visaIssuedAt: '', appointmentAt: '' };
+
 export default function RequestDetailPage() {
   const { id } = useParams<{ id: string }>();
   const nav = useNavigate();
@@ -42,6 +50,11 @@ export default function RequestDetailPage() {
   const [feeCurrency, setFeeCurrency] = useState('AED');
   const [feeBusy, setFeeBusy] = useState(false);
   const [feeMsg, setFeeMsg] = useState<string | null>(null);
+
+  // Per-beneficiary visa-info editing (Typist only), keyed by beneficiary id
+  const [visaDraft, setVisaDraft] = useState<Record<string, VisaDraft>>({});
+  const [visaSavingId, setVisaSavingId] = useState<string | null>(null);
+  const [visaMsg, setVisaMsg] = useState<string | null>(null);
 
   // Lookup maps: id -> { nameEn, nameAr }
   const [offices, setOffices] = useState<Record<string, { nameEn: string; nameAr: string }>>({});
@@ -101,6 +114,54 @@ export default function RequestDetailPage() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Seed the visa-info drafts from the loaded beneficiaries (once per id, so a
+  // reload after saving doesn't clobber in-progress edits on other rows).
+  useEffect(() => {
+    if (!request?.beneficiaries) return;
+    setVisaDraft((prev) => {
+      const next = { ...prev };
+      for (const b of request.beneficiaries!) {
+        if (!next[b.id]) {
+          next[b.id] = {
+            visaNumber: b.visaNumber ?? '',
+            visaIssuedAt: b.visaIssuedAt ? b.visaIssuedAt.slice(0, 10) : '',
+            appointmentAt: b.appointmentAt ? b.appointmentAt.slice(0, 16) : '',
+          };
+        }
+      }
+      return next;
+    });
+  }, [request]);
+
+  function setVisaField(bid: string, field: keyof VisaDraft, value: string) {
+    setVisaDraft((prev) => ({
+      ...prev,
+      [bid]: { ...(prev[bid] ?? EMPTY_VISA_DRAFT), [field]: value },
+    }));
+  }
+
+  async function saveVisaInfo(bid: string) {
+    if (!request) return;
+    const d = visaDraft[bid] ?? EMPTY_VISA_DRAFT;
+    const body: { visaNumber?: string; visaIssuedAt?: string; appointmentAt?: string } = {};
+    if (d.visaNumber.trim()) body.visaNumber = d.visaNumber.trim();
+    if (d.visaIssuedAt) body.visaIssuedAt = d.visaIssuedAt;
+    // datetime-local has no timezone; normalise to a full ISO string for the API.
+    if (d.appointmentAt) body.appointmentAt = new Date(d.appointmentAt).toISOString();
+    setVisaSavingId(bid);
+    setVisaMsg(null);
+    setErr(null);
+    try {
+      await requestsApi.updateBeneficiaryVisa(request.id, bid, body);
+      setVisaMsg(t('detail.visaInfoSaved'));
+      await load();
+    } catch (e: any) {
+      setErr(e?.message ?? t('detail.error'));
+    } finally {
+      setVisaSavingId(null);
+    }
+  }
 
   async function saveFees() {
     if (!request) return;
@@ -232,18 +293,70 @@ export default function RequestDetailPage() {
 
           <div className="card">
             <div className="card-title">{t('detail.beneficiaries')} ({request.beneficiaries?.length ?? 0})</div>
+            {visaMsg && <div className="success-box" style={{ marginBottom: 8 }}>{visaMsg}</div>}
             {request.beneficiaries && request.beneficiaries.length > 0 ? (
               <ol style={{ paddingInlineStart: 20, margin: 0 }}>
-                {request.beneficiaries.map((b) => (
-                  <li key={b.id} style={{ padding: '6px 0', borderBottom: '1px dashed var(--line)' }}>
-                    <strong>{b.fullNameEn}</strong>
-                    {b.passportNumber && (
-                      <span className="muted mono" style={{ marginInlineStart: 12 }}>
-                        {t('detail.beneficiaryPassport')}: {b.passportNumber}
-                      </span>
-                    )}
-                  </li>
-                ))}
+                {request.beneficiaries.map((b) => {
+                  const draft = visaDraft[b.id] ?? EMPTY_VISA_DRAFT;
+                  const canEditVisa = hasPersona('TYPIST') && VISA_INFO_EDITABLE_STATUSES.has(request.status);
+                  return (
+                    <li key={b.id} style={{ padding: '6px 0', borderBottom: '1px dashed var(--line)' }}>
+                      <strong>{b.fullNameEn}</strong>
+                      {b.passportNumber && (
+                        <span className="muted mono" style={{ marginInlineStart: 12 }}>
+                          {t('detail.beneficiaryPassport')}: {b.passportNumber}
+                        </span>
+                      )}
+
+                      {(b.visaNumber || b.visaIssuedAt || b.appointmentAt) && (
+                        <div className="muted mono" style={{ fontSize: '0.78rem', marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                          {b.visaNumber && <span>{t('detail.beneficiaryVisaNumber')}: {b.visaNumber}</span>}
+                          {b.visaIssuedAt && <span>{t('detail.beneficiaryVisaIssued')}: {b.visaIssuedAt.slice(0, 10)}</span>}
+                          {b.appointmentAt && <span>{t('detail.beneficiaryAppointment')}: {new Date(b.appointmentAt).toLocaleString(dateLocale)}</span>}
+                        </div>
+                      )}
+
+                      {canEditVisa && (
+                        <div className="field-row" style={{ alignItems: 'flex-end', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                          <div className="field" style={{ margin: 0 }}>
+                            <label>{t('detail.beneficiaryVisaNumber')}</label>
+                            <input
+                              value={draft.visaNumber}
+                              maxLength={50}
+                              onChange={(e) => setVisaField(b.id, 'visaNumber', e.target.value)}
+                            />
+                          </div>
+                          <div className="field" style={{ margin: 0 }}>
+                            <label>{t('detail.beneficiaryVisaIssued')}</label>
+                            <input
+                              type="date"
+                              value={draft.visaIssuedAt}
+                              onChange={(e) => setVisaField(b.id, 'visaIssuedAt', e.target.value)}
+                            />
+                          </div>
+                          <div className="field" style={{ margin: 0 }}>
+                            <label>{t('detail.beneficiaryAppointment')}</label>
+                            <input
+                              type="datetime-local"
+                              value={draft.appointmentAt}
+                              onChange={(e) => setVisaField(b.id, 'appointmentAt', e.target.value)}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            className="btn secondary small"
+                            onClick={() => saveVisaInfo(b.id)}
+                            disabled={visaSavingId === b.id}
+                          >
+                            {visaSavingId === b.id
+                              ? <><span className="spinner"></span>{t('common.saving')}</>
+                              : t('detail.visaInfoSave')}
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ol>
             ) : <div className="muted">—</div>}
           </div>

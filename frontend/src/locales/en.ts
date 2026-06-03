@@ -159,6 +159,8 @@ export const en = {
     feesCurrency: 'Currency',
     feesUpdate: 'Update fees',
     feesUpdated: 'Fees updated',
+    visaInfoSave: 'Save visa info',
+    visaInfoSaved: 'Visa information saved',
     documents: 'Documents',
     history: 'History',
     actionsSection: 'Available actions',

@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  IsArray, IsEnum, IsInt, IsOptional, IsString, IsUUID, Min, Max, MaxLength,
+  IsArray, IsDateString, IsEnum, IsInt, IsOptional, IsString, IsUUID, Min, Max, MaxLength,
   ValidateNested, ArrayMinSize,
 } from 'class-validator';
 
@@ -55,6 +55,23 @@ export class UpdateRequestDto {
   @ApiPropertyOptional() @IsOptional() @IsUUID() countryOfVisitId?: string;
   @ApiPropertyOptional() @IsOptional() @IsUUID() visaTypeId?: string;
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) @Max(50) numberOfPassengers?: number;
+}
+
+// Embassy-stage visa data the Typist fills in per beneficiary (visa number,
+// issue date, embassy appointment). All fields optional so the Typist can save
+// them incrementally; only the provided fields are written.
+export class UpdateBeneficiaryVisaDto {
+  @ApiPropertyOptional({ description: 'Visa number issued by the embassy' })
+  @IsOptional() @IsString() @MaxLength(50)
+  visaNumber?: string;
+
+  @ApiPropertyOptional({ description: 'Date the visa was issued (YYYY-MM-DD)' })
+  @IsOptional() @IsDateString()
+  visaIssuedAt?: string;
+
+  @ApiPropertyOptional({ description: 'Embassy appointment date/time (ISO 8601)' })
+  @IsOptional() @IsDateString()
+  appointmentAt?: string;
 }
 
 export class UpdateFeesDto {

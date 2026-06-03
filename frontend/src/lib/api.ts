@@ -146,6 +146,7 @@ export interface Beneficiary {
   sequenceNo: number;
   appointmentAt?: string;
   visaNumber?: string;
+  visaIssuedAt?: string;
 }
 
 export interface OfficeContact {
@@ -196,6 +197,12 @@ export const requestsApi = {
   create: (body: any) => api<VisaRequest>('/api/requests', { method: 'POST', body }),
   updateFees: (id: string, feesAmount: number, feesCurrency?: string) =>
     api<VisaRequest>(`/api/requests/${id}/fees`, { method: 'PATCH', body: { feesAmount, feesCurrency } }),
+  updateBeneficiaryVisa: (
+    id: string,
+    beneficiaryId: string,
+    body: { visaNumber?: string; visaIssuedAt?: string; appointmentAt?: string },
+  ) =>
+    api<VisaRequest>(`/api/requests/${id}/beneficiaries/${beneficiaryId}`, { method: 'PATCH', body }),
 };
 
 export const referenceApi = {

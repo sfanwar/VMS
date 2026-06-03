@@ -210,4 +210,52 @@ describe('RequestsService', () => {
       expect(r.feesUpdatedBy).toBe('u-t');
     });
   });
+
+  describe('updateBeneficiaryVisa', () => {
+    const typistActor = { id: 'u-t', email: 't@e.c', personas: ['TYPIST'] };
+
+    it('rejects if actor is not a Typist', async () => {
+      await expect(
+        service.updateBeneficiaryVisa('r1', 'b1', { visaNumber: 'V123' } as any, officeActor as any),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('rejects editing outside the embassy / fee-update stages', async () => {
+      reqRepo.__store.push({ id: 'r1', officeId: 'office-1', status: 'TYPIST_PROCESSING', beneficiaries: [] });
+      benRepo.__store.push({ id: 'b1', requestId: 'r1', fullNameEn: 'Alice', sequenceNo: 1 });
+      await expect(
+        service.updateBeneficiaryVisa('r1', 'b1', { visaNumber: 'V123' } as any, typistActor as any),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('404s when the beneficiary is not on the request', async () => {
+      reqRepo.__store.push({ id: 'r1', officeId: 'office-1', status: 'AT_EMBASSY', beneficiaries: [] });
+      await expect(
+        service.updateBeneficiaryVisa('r1', 'no-such', { visaNumber: 'V123' } as any, typistActor as any),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('Typist can write visa number, issue date and appointment for a beneficiary', async () => {
+      reqRepo.__store.push({ id: 'r1', officeId: 'office-1', status: 'AT_EMBASSY', beneficiaries: [] });
+      benRepo.__store.push({ id: 'b1', requestId: 'r1', fullNameEn: 'Alice', sequenceNo: 1 });
+      await service.updateBeneficiaryVisa(
+        'r1', 'b1',
+        { visaNumber: 'V123', visaIssuedAt: '2026-06-01', appointmentAt: '2026-06-10T09:30:00.000Z' } as any,
+        typistActor as any,
+      );
+      const saved = benRepo.__store.find((b: any) => b.id === 'b1');
+      expect(saved.visaNumber).toBe('V123');
+      expect(saved.visaIssuedAt).toBe('2026-06-01');
+      expect(saved.appointmentAt).toBeInstanceOf(Date);
+    });
+
+    it('only writes the fields provided (incremental save)', async () => {
+      reqRepo.__store.push({ id: 'r1', officeId: 'office-1', status: 'TYPIST_FEE_UPDATE', beneficiaries: [] });
+      benRepo.__store.push({ id: 'b1', requestId: 'r1', fullNameEn: 'Alice', sequenceNo: 1, visaNumber: 'OLD' });
+      await service.updateBeneficiaryVisa('r1', 'b1', { visaIssuedAt: '2026-06-02' } as any, typistActor as any);
+      const saved = benRepo.__store.find((b: any) => b.id === 'b1');
+      expect(saved.visaNumber).toBe('OLD'); // untouched
+      expect(saved.visaIssuedAt).toBe('2026-06-02');
+    });
+  });
 });
