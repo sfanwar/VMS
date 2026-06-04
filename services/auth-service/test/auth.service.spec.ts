@@ -9,10 +9,19 @@ import { RefreshToken } from '../src/auth/entities/refresh-token.entity';
 import { LoginAudit } from '../src/auth/entities/login-audit.entity';
 import { UnauthorizedException, HttpException, NotFoundException } from '@nestjs/common';
 
-// bcrypt's CommonJS exports aren't configurable, so `jest.spyOn(bcrypt, 'compare')`
-// throws "Cannot redefine property". Re-export through a plain object (keeping the
-// real implementations) so the security tests can spy on it.
-jest.mock('bcrypt', () => ({ ...jest.requireActual('bcrypt') }));
+// `import * as bcrypt` is wrapped by TypeScript's __importStar helper in
+// non-configurable getters, so `jest.spyOn(bcrypt, 'compare')` throws
+// "Cannot redefine property". Mock the module so compare/hash are jest.fn
+// wrappers (delegating to the real implementations); tests assert on them
+// directly instead of spying.
+jest.mock('bcrypt', () => {
+  const actual = jest.requireActual('bcrypt');
+  return {
+    ...actual,
+    hash: jest.fn((data: any, saltOrRounds: any) => actual.hash(data, saltOrRounds)),
+    compare: jest.fn((data: any, encrypted: any) => actual.compare(data, encrypted)),
+  };
+});
 
 // In-memory repository mocks
 function mockRepo<T extends object>(): jest.Mocked<Repository<T>> {
@@ -196,17 +205,16 @@ describe('AuthService', () => {
     });
 
     it('AUTH-S-007: uses bcrypt for password verification (timing-safe)', async () => {
-      const compareSpy = jest.spyOn(bcrypt, 'compare');
+      (bcrypt.compare as unknown as jest.Mock).mockClear();
       await seedUser();
       await service.login('user@example.com', 'Passw0rd!', ctx);
-      expect(compareSpy).toHaveBeenCalled();
+      expect(bcrypt.compare).toHaveBeenCalled();
     });
 
     it('does bcrypt work even for unknown emails (timing equality)', async () => {
-      const compareSpy = jest.spyOn(bcrypt, 'compare');
-      compareSpy.mockClear();
+      (bcrypt.compare as unknown as jest.Mock).mockClear();
       await expect(service.login('nobody@example.com', 'whatever', ctx)).rejects.toThrow();
-      expect(compareSpy).toHaveBeenCalled();
+      expect(bcrypt.compare).toHaveBeenCalled();
     });
 
     it('AUTH-S-002: does not include password hash in returned profile', async () => {
