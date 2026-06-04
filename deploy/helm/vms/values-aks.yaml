@@ -26,9 +26,14 @@ minio:
 # nip.io magic-DNS host (e.g. vms.<ingress-ip>.nip.io) without owning a domain
 # or running cert-manager. For production, set tls.enabled=true with a real DNS
 # A record and a cert-manager "letsencrypt-prod" ClusterIssuer.
+#
+# serverSnippet is OFF because ingress-nginx disables snippet annotations by
+# default (v1.9+, CVE-2023-5043); the /internal/ paths stay protected by the
+# NetworkPolicies and the services' INTERNAL_API_KEY check.
 ingress:
   enabled: true
   className: nginx
+  serverSnippet: false
   tls:
     enabled: false
     secretName: vms-tls
