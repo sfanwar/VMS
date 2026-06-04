@@ -42,6 +42,7 @@ jobs:
       url: https://${{ vars.AKS_INGRESS_HOST }}
     permissions:
       contents: read
+      packages: read           # allow reading GHCR packages
       id-token: write          # required for Azure OIDC federated login
     steps:
       - uses: actions/checkout@v4
@@ -95,11 +96,21 @@ jobs:
 
       - name: Create / refresh GHCR image pull secret
         if: ${{ !inputs.dry_run }}
+        env:
+          # A classic PAT with read:packages — long-lived so the kubelet can
+          # keep pulling on pod restarts/scale-ups (GITHUB_TOKEN is too
+          # short-lived and isn't valid for cross-workflow image pulls).
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_PASSWORD: ${{ secrets.GHCR_PAT }}
         run: |
+          if [ -z "$GHCR_PASSWORD" ]; then
+            echo "::error::GHCR_PAT environment secret is not set. Create a classic PAT with read:packages and add it as the GHCR_PAT secret in the production environment."
+            exit 1
+          fi
           kubectl -n vms create secret docker-registry ghcr-pull \
             --docker-server="${REGISTRY}" \
-            --docker-username="${{ github.actor }}" \
-            --docker-password="${{ secrets.GITHUB_TOKEN }}" \
+            --docker-username="${GHCR_USERNAME}" \
+            --docker-password="${GHCR_PASSWORD}" \
             --dry-run=client -o yaml | kubectl apply -f -
           # Attach the pull secret to the namespace's default ServiceAccount so the
           # pre-upgrade migration Job (which has no imagePullSecrets of its own) can
