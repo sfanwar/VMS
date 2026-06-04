@@ -141,6 +141,10 @@ ingress:
   enabled: true
   className: nginx
   host: vms.example.gov
+  # server-snippet 404s the /internal/ paths at the edge. Requires the
+  # ingress-nginx controller to allow snippet annotations (disabled by
+  # default since v1.9 / CVE-2023-5043). Set false on hardened controllers.
+  serverSnippet: true
   tls:
     enabled: true
     secretName: vms-tls
