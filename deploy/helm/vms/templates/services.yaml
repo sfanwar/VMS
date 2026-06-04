@@ -23,7 +23,12 @@ metadata:
     app: {{ $svc.name }}
     tier: backend
 spec:
+  {{- /* Omit replicas for HPA-managed services (gateway, workflow) so the
+         Deployment doesn't fight the HorizontalPodAutoscaler for ownership of
+         .spec.replicas (server-side apply conflict on upgrade). */}}
+  {{- if not (and $.Values.autoscaling.enabled (has $key (list "gateway" "workflow"))) }}
   replicas: {{ $svc.replicas }}
+  {{- end }}
   strategy:
     type: RollingUpdate
     rollingUpdate:
