@@ -124,17 +124,27 @@ jobs:
             --set-string secrets.redisPassword="${{ secrets.VMS_REDIS_PASSWORD }}" \
             --set-string secrets.minioRootUser="${{ secrets.VMS_MINIO_ROOT_USER }}" \
             --set-string secrets.minioRootPassword="${{ secrets.VMS_MINIO_ROOT_PASSWORD }}" \
-            ${{ inputs.dry_run && '--dry-run' || '--wait --timeout 10m --atomic' }}
+            ${{ inputs.dry_run && '--dry-run' || '--wait --timeout 10m' }}
+
+      - name: Show pod status (always)
+        if: ${{ always() && !inputs.dry_run }}
+        run: |
+          echo "=== pods ==="
+          kubectl -n vms get pods -o wide || true
+          echo "=== not-running pod descriptions ==="
+          for p in $(kubectl -n vms get pods --no-headers 2>/dev/null | grep -v Running | awk '{print $1}'); do
+            echo "----- describe $p -----"
+            kubectl -n vms describe pod "$p" | tail -25 || true
+            echo "----- logs $p (previous+current) -----"
+            kubectl -n vms logs "$p" --all-containers --tail=40 || true
+            kubectl -n vms logs "$p" --all-containers --previous --tail=40 2>/dev/null || true
+          done
+          echo "=== recent events ==="
+          kubectl -n vms get events --sort-by=.lastTimestamp | tail -40 || true
 
       - name: Verify rollout
         if: ${{ !inputs.dry_run }}
         run: |
           echo "Deployed tag: ${{ steps.tag.outputs.tag }}"
-          kubectl -n vms rollout status deploy/api-gateway --timeout=300s
+          kubectl -n vms rollout status deploy/api-gateway --timeout=120s
           kubectl -n vms get pods -o wide
-
-      - name: Dump diagnostics on failure
-        if: ${{ failure() && !inputs.dry_run }}
-        run: |
-          kubectl -n vms get all || true
-          kubectl -n vms get events --sort-by=.lastTimestamp | tail -40 || true
