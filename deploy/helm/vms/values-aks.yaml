@@ -1,0 +1,43 @@
+# ─────────────────────────────────────────────────────────
+# AKS deployment overlay (non-secret configuration).
+#
+# Used by the "Deploy to AKS" job in .github/workflows/release.yml:
+#
+#   helm upgrade --install vms deploy/helm/vms -f deploy/helm/vms/values-aks.yaml ...
+#
+# Image coordinates (registry/repository/tag), the ingress host and all
+# secret values are injected at deploy time via --set, so they live in
+# GitHub Environment secrets/variables rather than in this file.
+# ─────────────────────────────────────────────────────────
+
+# Never run the dev-only mail catcher in a real cluster.
+mailhog:
+  enabled: false
+
+# Azure CSI dynamically provisions managed disks for the StatefulSets.
+postgres:
+  storageClass: managed-csi
+minio:
+  storageClass: managed-csi
+
+# AGIC/nginx ingress with cert-manager-issued TLS.
+ingress:
+  enabled: true
+  className: nginx
+  tls:
+    enabled: true
+    secretName: vms-tls
+    issuer: letsencrypt-prod
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+
+# Scale the edge + hot-path services under load.
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+
+# Run DB migrations as a pre-upgrade hook on every release.
+migrations:
+  enabled: true
