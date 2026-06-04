@@ -120,6 +120,10 @@ jobs:
 
       - name: Helm upgrade --install
         run: |
+          # migrations.enabled=false: the Helm migration hook runs the
+          # auth-service image expecting infrastructure/migrations/data-source.js,
+          # which isn't bundled in the per-service images. We apply the schema
+          # from init.sql in the next step instead.
           helm upgrade --install vms deploy/helm/vms \
             --namespace vms \
             -f deploy/helm/vms/values-aks.yaml \
@@ -127,7 +131,7 @@ jobs:
             --set global.imageRepository="${{ steps.img.outputs.repo }}" \
             --set global.imageTag="${{ steps.tag.outputs.tag }}" \
             --set global.imagePullSecrets[0].name=ghcr-pull \
-            --set migrations.image="${REGISTRY}/${{ steps.img.outputs.repo }}-auth-service:${{ steps.tag.outputs.tag }}" \
+            --set migrations.enabled=false \
             --set ingress.host="${{ vars.AKS_INGRESS_HOST }}" \
             --set-string secrets.jwtSecret="${{ secrets.VMS_JWT_SECRET }}" \
             --set-string secrets.internalApiKey="${{ secrets.VMS_INTERNAL_API_KEY }}" \
@@ -136,6 +140,26 @@ jobs:
             --set-string secrets.minioRootUser="${{ secrets.VMS_MINIO_ROOT_USER }}" \
             --set-string secrets.minioRootPassword="${{ secrets.VMS_MINIO_ROOT_PASSWORD }}" \
             ${{ inputs.dry_run && '--dry-run' || '--wait --timeout 10m' }}
+
+      - name: Apply database schema (init.sql)
+        if: ${{ !inputs.dry_run }}
+        run: |
+          kubectl -n vms rollout status statefulset/postgres --timeout=180s
+          echo "Applying infrastructure/postgres/init.sql into postgres-0..."
+          # init.sql is idempotent apart from 3 CREATE TYPE enums (Postgres has
+          # no IF NOT EXISTS for types), so tolerate errors here and verify after.
+          kubectl -n vms exec -i postgres-0 -- \
+            sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f -' \
+            < infrastructure/postgres/init.sql || true
+          echo "Verifying schema landed..."
+          present=$(echo "SELECT to_regclass('requests.visa_requests') IS NOT NULL;" \
+            | kubectl -n vms exec -i postgres-0 -- \
+                sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA' \
+            | tr -d '[:space:]')
+          echo "requests.visa_requests present: [$present]"
+          if [ "$present" != "t" ]; then
+            echo "::error::Database schema was not applied (requests.visa_requests missing)"; exit 1
+          fi
 
       - name: Show pod status (always)
         if: ${{ always() && !inputs.dry_run }}
