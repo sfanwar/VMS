@@ -49,17 +49,35 @@ spec:
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           # Serve the pre-built /app/dist with a tiny dependency-free static
           # server (Node built-ins only) with SPA fallback. Avoids `vite
-          # preview`, which needs a writable /app for its bundled-config temp
-          # file and enforces a Host allow-list — both awkward in a non-root,
-          # read-only-ish container behind an arbitrary ingress host.
+          # preview` (writable-/app + Host allow-list issues).
+          #
+          # It also rewrites the API base URL that was baked into the bundle at
+          # build time (VITE_API_BASE defaulted to http://localhost:3000) to a
+          # relative path, so the browser calls /api/... on the same origin and
+          # the ingress routes it to the api-gateway. Override REWRITE_TO via
+          # the API_BASE_REWRITE_TO env to point at an absolute API origin.
+          env:
+            - name: API_BASE_REWRITE_FROM
+              value: "http://localhost:3000"
+            - name: API_BASE_REWRITE_TO
+              value: ""
           command: ["node"]
           args:
             - -e
             - |
               const http=require('http'),fs=require('fs'),path=require('path');
               const root='/app/dist';
+              const FROM=process.env.API_BASE_REWRITE_FROM||'',TO=process.env.API_BASE_REWRITE_TO||'';
               const types={'.html':'text/html; charset=utf-8','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.ico':'image/x-icon','.webp':'image/webp','.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf','.map':'application/json','.txt':'text/plain; charset=utf-8'};
-              const send=(res,file,code)=>{fs.readFile(file,(e,data)=>{if(e){res.statusCode=404;res.end('Not found');return;}res.statusCode=code||200;res.setHeader('Content-Type',types[path.extname(file)]||'application/octet-stream');res.end(data);});};
+              const rewritable={'.js':1,'.mjs':1,'.html':1};
+              const send=(res,file,code)=>{fs.readFile(file,(e,data)=>{
+                if(e){res.statusCode=404;res.end('Not found');return;}
+                const ext=path.extname(file);
+                if(FROM&&rewritable[ext]){data=Buffer.from(data.toString('utf8').split(FROM).join(TO));}
+                res.statusCode=code||200;
+                res.setHeader('Content-Type',types[ext]||'application/octet-stream');
+                res.end(data);
+              });};
               http.createServer((req,res)=>{
                 let p=decodeURIComponent((req.url||'/').split('?')[0]);
                 let file=path.join(root,p);
@@ -71,7 +89,7 @@ spec:
                     else{send(res,file,200);}
                   });
                 });
-              }).listen(5173,'0.0.0.0',()=>console.log('static server listening on :5173'));
+              }).listen(5173,'0.0.0.0',()=>console.log('static server listening on :5173 (api rewrite '+(FROM||'<none>')+' -> "'+TO+'")'));
           ports: [{ containerPort: {{ .Values.frontend.targetPort | default 5173 }}, name: http }]
           resources:
             {{- toYaml .Values.frontend.resources | nindent 12 }}
