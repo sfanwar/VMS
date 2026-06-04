@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag / image tag to deploy (e.g. v1.2.3)'
+        description: 'Release/image tag to deploy — just the version, e.g. v1.2.3'
         required: true
       dry_run:
         description: 'Render the manifests with `helm upgrade --dry-run` instead of applying'
@@ -49,6 +49,25 @@ jobs:
       - name: Compute lowercase image repository
         id: img
         run: echo "repo=${GITHUB_REPOSITORY_OWNER,,}/vms" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve image tag
+        id: tag
+        env:
+          RAW_TAG: ${{ inputs.tag }}
+        run: |
+          # Defensive cleanup: people sometimes paste the field label too
+          # (e.g. "tag = v1.2.3" or "tag: v1.2.3"). Reduce the input to just
+          # the version so a stray label/colon can't corrupt the image ref.
+          clean="${RAW_TAG//[[:space:]]/}"   # strip all whitespace
+          clean="${clean#tag}"               # strip an accidental leading "tag"
+          clean="${clean#[:=]}"              # strip a leading ':' or '='
+          clean="${clean//\"/}"              # strip double quotes
+          clean="${clean//\'/}"              # strip single quotes
+          if [ -z "$clean" ]; then
+            echo "::error::tag is empty after cleaning (raw input was '$RAW_TAG')"; exit 1
+          fi
+          echo "tag=$clean" >> "$GITHUB_OUTPUT"
+          echo "Resolved image tag: [$clean]  (raw input: [$RAW_TAG])"
 
       - name: Azure login (OIDC)
         uses: azure/login@v2
@@ -95,9 +114,9 @@ jobs:
             -f deploy/helm/vms/values-aks.yaml \
             --set global.imageRegistry="${REGISTRY}" \
             --set global.imageRepository="${{ steps.img.outputs.repo }}" \
-            --set global.imageTag="${{ inputs.tag }}" \
+            --set global.imageTag="${{ steps.tag.outputs.tag }}" \
             --set global.imagePullSecrets[0].name=ghcr-pull \
-            --set migrations.image="${REGISTRY}/${{ steps.img.outputs.repo }}-auth-service:${{ inputs.tag }}" \
+            --set migrations.image="${REGISTRY}/${{ steps.img.outputs.repo }}-auth-service:${{ steps.tag.outputs.tag }}" \
             --set ingress.host="${{ vars.AKS_INGRESS_HOST }}" \
             --set-string secrets.jwtSecret="${{ secrets.VMS_JWT_SECRET }}" \
             --set-string secrets.internalApiKey="${{ secrets.VMS_INTERNAL_API_KEY }}" \
@@ -110,7 +129,7 @@ jobs:
       - name: Verify rollout
         if: ${{ !inputs.dry_run }}
         run: |
-          echo "Deployed tag: ${{ inputs.tag }}"
+          echo "Deployed tag: ${{ steps.tag.outputs.tag }}"
           kubectl -n vms rollout status deploy/api-gateway --timeout=300s
           kubectl -n vms get pods -o wide
 
