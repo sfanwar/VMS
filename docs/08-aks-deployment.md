@@ -1,23 +1,34 @@
-# AKS Deployment (Release Pipeline)
+# AKS Deployment
 
-The `Release` workflow (`.github/workflows/release.yml`) builds, scans, and then
-**deploys** the VMS stack to Azure Kubernetes Service via Helm.
+Deployment to Azure Kubernetes Service is a **standalone, on-demand workflow**
+(`.github/workflows/deploy-aks.yml`), separate from the `Release` workflow that
+builds and scans images. Run it *after* a release when you want to roll that
+version out to the cluster.
 
 ```
-push tag vX.Y.Z ──► build-and-push ──► scan-images ──► deploy-aks ──► AKS (helm upgrade --install)
+push tag vX.Y.Z ──► Release (build-and-push + scan-images) ──► images in GHCR
+                                                                     │
+                          manual run, supply the tag ──► Deploy to AKS (helm upgrade --install)
 ```
 
-## When it deploys
+The deploy workflow does **not** build anything — it only deploys images that
+the Release workflow already pushed to GHCR for the given tag.
 
-| Trigger | Deploys? |
-| --- | --- |
-| `git push` of a `vX.Y.Z` tag | ✅ always |
-| Manual `workflow_dispatch` with **deploy = true** | ✅ |
-| Manual `workflow_dispatch` with deploy = false (default) | ❌ build/scan only |
+## How to run it
 
-The `deploy-aks` job runs in the **`production` GitHub Environment**, so any
-required-reviewer / wait-timer protection rules configured there apply before a
-release reaches the cluster.
+1. Make sure the `Release` workflow has finished for the tag you want (images
+   `ghcr.io/<owner>/vms-<service>:<tag>` exist).
+2. Actions tab → **Deploy to AKS** → **Run workflow**.
+3. Inputs:
+
+   | Input | Required | Description |
+   | --- | --- | --- |
+   | `tag` | ✅ | Release / image tag to deploy, e.g. `v1.2.3` |
+   | `dry_run` | — | Render with `helm upgrade --dry-run` instead of applying |
+
+The job runs in the **`production` GitHub Environment**, so any required-reviewer
+/ wait-timer protection rules configured there apply before a release reaches the
+cluster.
 
 ## Authentication — Azure OIDC (no stored secret)
 

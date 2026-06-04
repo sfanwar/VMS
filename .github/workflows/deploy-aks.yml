@@ -1,0 +1,116 @@
+name: Deploy to AKS
+
+# Standalone, on-demand deployment of a released VMS version to AKS.
+#
+# Run this *after* the Release workflow has built and pushed the images for a
+# tag (it does not build anything itself — it only deploys existing GHCR
+# images via Helm). Trigger it manually from the Actions tab and supply the
+# release tag to roll out.
+#
+# Auth uses Azure OIDC (workload identity federation) — no long-lived
+# service-principal secret is stored in the repo. See docs/08-aks-deployment.md
+# for the one-time federated-credential setup and the full list of required
+# Environment secrets/variables.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag / image tag to deploy (e.g. v1.2.3)'
+        required: true
+      dry_run:
+        description: 'Render the manifests with `helm upgrade --dry-run` instead of applying'
+        type: boolean
+        default: false
+        required: false
+
+env:
+  REGISTRY: ghcr.io
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.tag }} to AKS
+    runs-on: ubuntu-latest
+    # Gated behind the `production` GitHub Environment so its scoped
+    # secrets/vars and any required-reviewer rules apply before rollout.
+    environment:
+      name: production
+      url: https://${{ vars.AKS_INGRESS_HOST }}
+    permissions:
+      contents: read
+      id-token: write          # required for Azure OIDC federated login
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute lowercase image repository
+        id: img
+        run: echo "repo=${GITHUB_REPOSITORY_OWNER,,}/vms" >> "$GITHUB_OUTPUT"
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set AKS context (fetch kubeconfig)
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Ensure namespace exists
+        if: ${{ !inputs.dry_run }}
+        run: kubectl create namespace vms --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Create / refresh GHCR image pull secret
+        if: ${{ !inputs.dry_run }}
+        run: |
+          kubectl -n vms create secret docker-registry ghcr-pull \
+            --docker-server="${REGISTRY}" \
+            --docker-username="${{ github.actor }}" \
+            --docker-password="${{ secrets.GITHUB_TOKEN }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          # Attach the pull secret to the namespace's default ServiceAccount so the
+          # pre-upgrade migration Job (which has no imagePullSecrets of its own) can
+          # pull private GHCR images too.
+          kubectl -n vms patch serviceaccount default \
+            -p '{"imagePullSecrets":[{"name":"ghcr-pull"}]}'
+
+      - name: Helm upgrade --install
+        run: |
+          helm upgrade --install vms deploy/helm/vms \
+            --namespace vms \
+            -f deploy/helm/vms/values-aks.yaml \
+            --set global.imageRegistry="${REGISTRY}" \
+            --set global.imageRepository="${{ steps.img.outputs.repo }}" \
+            --set global.imageTag="${{ inputs.tag }}" \
+            --set global.imagePullSecrets[0].name=ghcr-pull \
+            --set migrations.image="${REGISTRY}/${{ steps.img.outputs.repo }}-auth-service:${{ inputs.tag }}" \
+            --set ingress.host="${{ vars.AKS_INGRESS_HOST }}" \
+            --set-string secrets.jwtSecret="${{ secrets.VMS_JWT_SECRET }}" \
+            --set-string secrets.internalApiKey="${{ secrets.VMS_INTERNAL_API_KEY }}" \
+            --set-string secrets.postgresPassword="${{ secrets.VMS_POSTGRES_PASSWORD }}" \
+            --set-string secrets.redisPassword="${{ secrets.VMS_REDIS_PASSWORD }}" \
+            --set-string secrets.minioRootUser="${{ secrets.VMS_MINIO_ROOT_USER }}" \
+            --set-string secrets.minioRootPassword="${{ secrets.VMS_MINIO_ROOT_PASSWORD }}" \
+            ${{ inputs.dry_run && '--dry-run' || '--wait --timeout 10m --atomic' }}
+
+      - name: Verify rollout
+        if: ${{ !inputs.dry_run }}
+        run: |
+          echo "Deployed tag: ${{ inputs.tag }}"
+          kubectl -n vms rollout status deploy/api-gateway --timeout=300s
+          kubectl -n vms get pods -o wide
+
+      - name: Dump diagnostics on failure
+        if: ${{ failure() && !inputs.dry_run }}
+        run: |
+          kubectl -n vms get all || true
+          kubectl -n vms get events --sort-by=.lastTimestamp | tail -40 || true
