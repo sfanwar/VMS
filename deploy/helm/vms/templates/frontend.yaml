@@ -8,8 +8,11 @@ metadata:
     tier: frontend
 spec:
   ports:
+    # Service is exposed on .Values.frontend.port (80, used by the ingress) and
+    # forwards to the container's actual listen port. The frontend image serves
+    # the built app with `vite preview` on 5173, so targetPort must match that.
     - port: {{ .Values.frontend.port }}
-      targetPort: 80
+      targetPort: {{ .Values.frontend.targetPort | default 5173 }}
       name: http
   selector:
     app: {{ .Values.frontend.name }}
@@ -45,15 +48,15 @@ spec:
         - name: frontend
           image: {{ include "vms.frontendImage" . }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
-          ports: [{ containerPort: 80, name: http }]
+          ports: [{ containerPort: {{ .Values.frontend.targetPort | default 5173 }}, name: http }]
           resources:
             {{- toYaml .Values.frontend.resources | nindent 12 }}
           readinessProbe:
-            httpGet: { path: /, port: 80 }
+            httpGet: { path: /, port: {{ .Values.frontend.targetPort | default 5173 }} }
             initialDelaySeconds: 5
             periodSeconds: 5
           livenessProbe:
-            httpGet: { path: /, port: 80 }
+            httpGet: { path: /, port: {{ .Values.frontend.targetPort | default 5173 }} }
             initialDelaySeconds: 15
             periodSeconds: 15
 {{- end }}
