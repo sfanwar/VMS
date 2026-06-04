@@ -98,14 +98,14 @@ jobs:
         if: ${{ !inputs.dry_run }}
         env:
           # A classic PAT with read:packages — long-lived so the kubelet can
-          # keep pulling on pod restarts/scale-ups (GITHUB_TOKEN is too
-          # short-lived and isn't valid for cross-workflow image pulls).
+          # keep pulling on pod restarts/scale-ups. Optional: if the GHCR
+          # packages are public, leave it unset and images pull anonymously.
           GHCR_USERNAME: ${{ github.actor }}
           GHCR_PASSWORD: ${{ secrets.GHCR_PAT }}
         run: |
           if [ -z "$GHCR_PASSWORD" ]; then
-            echo "::error::GHCR_PAT environment secret is not set. Create a classic PAT with read:packages and add it as the GHCR_PAT secret in the production environment."
-            exit 1
+            echo "::warning::GHCR_PAT not set — skipping image pull secret. This only works if the GHCR packages are PUBLIC."
+            exit 0
           fi
           kubectl -n vms create secret docker-registry ghcr-pull \
             --docker-server="${REGISTRY}" \
