@@ -12,8 +12,13 @@ metadata:
     {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
+    {{- if .Values.ingress.serverSnippet }}
+    {{- /* Requires the ingress-nginx controller to allow snippet annotations,
+           which is disabled by default since v1.9 (CVE-2023-5043). Set
+           ingress.serverSnippet=false on hardened controllers. */}}
     nginx.ingress.kubernetes.io/server-snippet: |
       location ~ /internal/ { return 404; }
+    {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   {{- if .Values.ingress.tls.enabled }}
