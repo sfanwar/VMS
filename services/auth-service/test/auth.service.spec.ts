@@ -9,13 +9,28 @@ import { RefreshToken } from '../src/auth/entities/refresh-token.entity';
 import { LoginAudit } from '../src/auth/entities/login-audit.entity';
 import { UnauthorizedException, HttpException, NotFoundException } from '@nestjs/common';
 
+// bcrypt's CommonJS exports aren't configurable, so `jest.spyOn(bcrypt, 'compare')`
+// throws "Cannot redefine property". Re-export through a plain object (keeping the
+// real implementations) so the security tests can spy on it.
+jest.mock('bcrypt', () => ({ ...jest.requireActual('bcrypt') }));
+
 // In-memory repository mocks
 function mockRepo<T extends object>(): jest.Mocked<Repository<T>> {
   const store: T[] = [];
   return {
     findOne: jest.fn(async ({ where }: any) => {
       return store.find((r) =>
-        Object.entries(where).every(([k, v]) => (r as any)[k] === v),
+        Object.entries(where).every(([k, v]: any) => {
+          // TypeORM skips `undefined` conditions entirely.
+          if (v === undefined) return true;
+          // Support find operators used by the service (e.g. MoreThan/LessThan).
+          if (v && v.constructor && v.constructor.name === 'FindOperator') {
+            if (v.type === 'moreThan') return (r as any)[k] > v.value;
+            if (v.type === 'lessThan') return (r as any)[k] < v.value;
+            return true; // other operators: treat as match for these tests
+          }
+          return (r as any)[k] === v;
+        }),
       ) ?? null;
     }),
     save: jest.fn(async (entity: any) => {
