@@ -9,8 +9,7 @@ metadata:
 spec:
   ports:
     # Service is exposed on .Values.frontend.port (80, used by the ingress) and
-    # forwards to the container's actual listen port. The frontend image serves
-    # the built app with `vite preview` on 5173, so targetPort must match that.
+    # forwards to the container's actual listen port (5173).
     - port: {{ .Values.frontend.port }}
       targetPort: {{ .Values.frontend.targetPort | default 5173 }}
       name: http
@@ -48,6 +47,31 @@ spec:
         - name: frontend
           image: {{ include "vms.frontendImage" . }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          # Serve the pre-built /app/dist with a tiny dependency-free static
+          # server (Node built-ins only) with SPA fallback. Avoids `vite
+          # preview`, which needs a writable /app for its bundled-config temp
+          # file and enforces a Host allow-list — both awkward in a non-root,
+          # read-only-ish container behind an arbitrary ingress host.
+          command: ["node"]
+          args:
+            - -e
+            - |
+              const http=require('http'),fs=require('fs'),path=require('path');
+              const root='/app/dist';
+              const types={'.html':'text/html; charset=utf-8','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.ico':'image/x-icon','.webp':'image/webp','.woff':'font/woff','.woff2':'font/woff2','.ttf':'font/ttf','.map':'application/json','.txt':'text/plain; charset=utf-8'};
+              const send=(res,file,code)=>{fs.readFile(file,(e,data)=>{if(e){res.statusCode=404;res.end('Not found');return;}res.statusCode=code||200;res.setHeader('Content-Type',types[path.extname(file)]||'application/octet-stream');res.end(data);});};
+              http.createServer((req,res)=>{
+                let p=decodeURIComponent((req.url||'/').split('?')[0]);
+                let file=path.join(root,p);
+                if(!file.startsWith(root)){res.statusCode=403;res.end('Forbidden');return;}
+                fs.stat(file,(err,st)=>{
+                  if(!err&&st.isDirectory()){file=path.join(file,'index.html');}
+                  fs.access(file,fs.constants.R_OK,(e)=>{
+                    if(e){send(res,path.join(root,'index.html'),200);}  /* SPA fallback */
+                    else{send(res,file,200);}
+                  });
+                });
+              }).listen(5173,'0.0.0.0',()=>console.log('static server listening on :5173'));
           ports: [{ containerPort: {{ .Values.frontend.targetPort | default 5173 }}, name: http }]
           resources:
             {{- toYaml .Values.frontend.resources | nindent 12 }}
