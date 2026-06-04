@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────
 # AKS deployment overlay (non-secret configuration).
 #
-# Used by the "Deploy to AKS" job in .github/workflows/release.yml:
+# Used by the "Deploy to AKS" workflow (.github/workflows/deploy-aks.yml):
 #
 #   helm upgrade --install vms deploy/helm/vms -f deploy/helm/vms/values-aks.yaml ...
 #
@@ -20,12 +20,17 @@ postgres:
 minio:
   storageClass: managed-csi
 
-# AGIC/nginx ingress with cert-manager-issued TLS.
+# nginx ingress.
+#
+# TLS is OFF for the POC: it lets the stack be reached over plain HTTP via a
+# nip.io magic-DNS host (e.g. vms.<ingress-ip>.nip.io) without owning a domain
+# or running cert-manager. For production, set tls.enabled=true with a real DNS
+# A record and a cert-manager "letsencrypt-prod" ClusterIssuer.
 ingress:
   enabled: true
   className: nginx
   tls:
-    enabled: true
+    enabled: false
     secretName: vms-tls
     issuer: letsencrypt-prod
   annotations:
