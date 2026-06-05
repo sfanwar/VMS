@@ -17,7 +17,7 @@ This document codifies BRD §5.2 (To-Be workflow) as an explicit state machine. 
 | `COMPLETED` | Success | **Yes** |
 | `RETURNED_TO_OFFICE` | Sent back for correction | No (re-enters SUBMITTED) |
 | `APOLOGIZED` | Director closed with apology | **Yes** |
-| `REJECTED` | Outright rejection | **Yes** |
+| `REJECTED` | Outright rejection (reserved terminal status; no transition currently targets it) | **Yes** |
 
 ## Transition table
 
@@ -34,7 +34,6 @@ The table below is the source of truth. Workflow-service has it in code (`workfl
 | `DIRECTOR_REVIEW` | `APPROVE` | `TYPIST_PROCESSING` | DIRECTOR | Assigns to Typist team |
 | `DIRECTOR_REVIEW` | `RETURN_FOR_CORRECTION` | `FINAL_VERIFICATION` | DIRECTOR | Comment required |
 | `DIRECTOR_REVIEW` | `APOLOGIZE` | `APOLOGIZED` | DIRECTOR | Comment required; sends email to office |
-| `DIRECTOR_REVIEW` | `REJECT` | `REJECTED` | DIRECTOR | Comment required |
 | `TYPIST_PROCESSING` | `SEND_TO_EMBASSY` | `WAITING_FOR_EMBASSY` | TYPIST | All Visa Applications uploaded; appointments scheduled; fees set |
 | `WAITING_FOR_EMBASSY` | `UPLOAD_VISAS` | `WAITING_FINAL_REVIEW` | OFFICE, TYPIST² | Visa documents match beneficiary count |
 | `WAITING_FOR_EMBASSY` | `REASSIGN_TO_SELF` | `WAITING_FOR_EMBASSY` | TYPIST | Optional: Typist takes over uploading visas (BRD §5.2 last bullet) |
@@ -58,7 +57,6 @@ stateDiagram-v2
     DIRECTOR_REVIEW --> TYPIST_PROCESSING: APPROVE
     DIRECTOR_REVIEW --> FINAL_VERIFICATION: RETURN_FOR_CORRECTION
     DIRECTOR_REVIEW --> APOLOGIZED: APOLOGIZE
-    DIRECTOR_REVIEW --> REJECTED: REJECT
     TYPIST_PROCESSING --> WAITING_FOR_EMBASSY: SEND_TO_EMBASSY
     WAITING_FOR_EMBASSY --> WAITING_FINAL_REVIEW: UPLOAD_VISAS
     WAITING_FINAL_REVIEW --> COMPLETED: COMPLETE (Sr.Officer)
