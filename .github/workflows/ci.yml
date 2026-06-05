@@ -108,6 +108,11 @@ jobs:
     name: End-to-end (Playwright)
     runs-on: ubuntu-latest
     needs: [test-services, test-frontend]
+    # Relax the auth rate limits for the whole stack: the e2e suite logs in many
+    # times from the runner's single IP and would otherwise hit the 429 throttle.
+    env:
+      AUTH_LOGIN_RATE_LIMIT: '100000'
+      AUTH_RATE_LIMIT: '100000'
     steps:
       - uses: actions/checkout@v4
 
