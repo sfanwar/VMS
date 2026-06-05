@@ -177,6 +177,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # gitleaks diffs <sha>^..<sha>; it needs full history (not a shallow
+          # clone) to resolve the parent commit.
+          fetch-depth: 0
 
       - name: gitleaks (secret detection)
         uses: gitleaks/gitleaks-action@v2
