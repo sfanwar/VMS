@@ -7,6 +7,11 @@ import { ChangePasswordDto, LoginDto, LogoutDto, RefreshDto } from './dto/auth.d
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser, AuthenticatedUser } from './decorators/current-user.decorator';
 
+// Per-IP login rate limit. Defaults to 10/min (brute-force protection); override
+// via AUTH_LOGIN_RATE_LIMIT (e.g. relaxed for the e2e suite, which logs in many
+// times from a single IP).
+const LOGIN_RATE_LIMIT = Number(process.env.AUTH_LOGIN_RATE_LIMIT) || 10;
+
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
@@ -14,8 +19,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
-  // 10 requests / minute per IP — protects against brute force
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: { limit: LOGIN_RATE_LIMIT, ttl: 60_000 } })
   @ApiOperation({ summary: 'Log in with email and password' })
   async login(@Body() dto: LoginDto, @Req() req: Request) {
     return this.authService.login(dto.email, dto.password, {
