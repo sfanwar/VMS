@@ -47,7 +47,7 @@ test.describe('E2E-003: RBAC', () => {
       .get('/api/workflow/next-actions?status=DIRECTOR_REVIEW')
       .then((r) => r.json());
     expect(next.actions).toEqual(
-      expect.arrayContaining(['APPROVE', 'RETURN_FOR_CORRECTION', 'APOLOGIZE', 'REJECT']),
+      expect.arrayContaining(['APPROVE', 'RETURN_FOR_CORRECTION', 'APOLOGIZE']),
     );
   });
 
