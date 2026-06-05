@@ -1,0 +1,31 @@
+# gitleaks configuration for the VMS repo.
+# Extends the default ruleset and allowlists intentional placeholders, CI-only
+# test secrets, and seed/sample/test fixtures so the security scan stays green.
+title = "VMS gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Intentional placeholders, CI test secrets, and fixtures"
+regexes = [
+  '''change-me[a-z0-9-]*''',
+  '''please-change-this-to-a-long-random-string''',
+  '''test-secret-for-ci-only-do-not-use-in-prod-1234567890''',
+  '''REPLACE-WITH-[A-Z0-9-]+''',
+  '''REPLACE-OWNER''',
+  '''dev-internal-key''',
+  '''minioadmin''',
+  '''Passw0rd!''',
+]
+paths = [
+  '''(^|/)\.env\.example$''',
+  '''(^|/)docker-compose\.ya?ml$''',
+  '''(^|/)deploy/helm/vms/values.*\.yaml$''',
+  '''(^|/)deploy/k8s/.*\.yaml$''',
+  '''(^|/)infrastructure/postgres/init\.sql$''',
+  '''.*\.spec\.ts$''',
+  '''(^|/)services/.*/src/seed\.ts$''',
+  '''(^|/)services/.*/src/sample-data\.ts$''',
+  '''(^|/)\.github/workflows/.*\.yml$''',
+]
