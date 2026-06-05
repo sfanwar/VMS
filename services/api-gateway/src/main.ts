@@ -35,10 +35,13 @@ const SERVICES = {
   '/api/reporting':      process.env.REPORTING_SERVICE_URL     ?? 'http://reporting-service:3007',
 };
 
-// Endpoints that DON'T require a JWT
+// Endpoints that DON'T require a JWT. Logout is public because it is
+// authenticated by the refresh token in the request body (no access token),
+// matching auth-service, which guards neither login/refresh nor logout.
 const PUBLIC_PATHS = [
   '/api/auth/login',
   '/api/auth/refresh',
+  '/api/auth/logout',
   '/health',
 ];
 
