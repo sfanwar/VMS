@@ -114,6 +114,10 @@ services:
       JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
       USER_SERVICE_URL: http://user-service:3002
       INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key}
+      # Rate limits — defaults match prod; raise (e.g. via the e2e CI step) to
+      # avoid 429s when a test suite logs in many times from a single IP.
+      AUTH_LOGIN_RATE_LIMIT: ${AUTH_LOGIN_RATE_LIMIT:-10}
+      AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-100}
     ports:
       - "3001:3001"
     networks:
