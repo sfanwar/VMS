@@ -83,8 +83,6 @@ export const TRANSITION_TABLE: TransitionRule[] = [
   { from: 'DIRECTOR_REVIEW', action: 'APPROVE', to: 'TYPIST_PROCESSING', allowedPersonas: ['DIRECTOR'] },
   { from: 'DIRECTOR_REVIEW', action: 'RETURN_FOR_CORRECTION', to: 'FINAL_VERIFICATION', allowedPersonas: ['DIRECTOR'], commentRequired: true },
   { from: 'DIRECTOR_REVIEW', action: 'APOLOGIZE', to: 'APOLOGIZED', allowedPersonas: ['DIRECTOR'], commentRequired: true },
-  // Per docs/03-workflow-state-machine.md §5.2: the Director may outright reject.
-  { from: 'DIRECTOR_REVIEW', action: 'REJECT', to: 'REJECTED', allowedPersonas: ['DIRECTOR'], commentRequired: true },
   {
     from: 'TYPIST_PROCESSING', action: 'SEND_TO_EMBASSY', to: 'WAITING_FOR_EMBASSY',
     allowedPersonas: ['TYPIST'],
