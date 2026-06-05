@@ -112,9 +112,8 @@ jobs:
             --docker-username="${GHCR_USERNAME}" \
             --docker-password="${GHCR_PASSWORD}" \
             --dry-run=client -o yaml | kubectl apply -f -
-          # Attach the pull secret to the namespace's default ServiceAccount so the
-          # pre-upgrade migration Job (which has no imagePullSecrets of its own) can
-          # pull private GHCR images too.
+          # Attach the pull secret to the namespace's default ServiceAccount so any
+          # pod without its own imagePullSecrets can still pull private GHCR images.
           kubectl -n vms patch serviceaccount default \
             -p '{"imagePullSecrets":[{"name":"ghcr-pull"}]}'
 
@@ -124,6 +123,8 @@ jobs:
           # auth-service image expecting infrastructure/migrations/data-source.js,
           # which isn't bundled in the per-service images. We apply the schema
           # from init.sql in the next step instead.
+          #
+          # --atomic rolls the release back automatically if the rollout fails.
           helm upgrade --install vms deploy/helm/vms \
             --namespace vms \
             -f deploy/helm/vms/values-aks.yaml \
@@ -139,7 +140,7 @@ jobs:
             --set-string secrets.redisPassword="${{ secrets.VMS_REDIS_PASSWORD }}" \
             --set-string secrets.minioRootUser="${{ secrets.VMS_MINIO_ROOT_USER }}" \
             --set-string secrets.minioRootPassword="${{ secrets.VMS_MINIO_ROOT_PASSWORD }}" \
-            ${{ inputs.dry_run && '--dry-run' || '--wait --timeout 10m' }}
+            ${{ inputs.dry_run && '--dry-run' || '--wait --timeout 10m --atomic' }}
 
       - name: Apply database schema (init.sql)
         if: ${{ !inputs.dry_run }}
@@ -161,25 +162,23 @@ jobs:
             echo "::error::Database schema was not applied (requests.visa_requests missing)"; exit 1
           fi
 
-      - name: Show pod status (always)
-        if: ${{ always() && !inputs.dry_run }}
-        run: |
-          echo "=== pods ==="
-          kubectl -n vms get pods -o wide || true
-          echo "=== not-running pod descriptions ==="
-          for p in $(kubectl -n vms get pods --no-headers 2>/dev/null | grep -v Running | awk '{print $1}'); do
-            echo "----- describe $p -----"
-            kubectl -n vms describe pod "$p" | tail -25 || true
-            echo "----- logs $p (previous+current) -----"
-            kubectl -n vms logs "$p" --all-containers --tail=40 || true
-            kubectl -n vms logs "$p" --all-containers --previous --tail=40 2>/dev/null || true
-          done
-          echo "=== recent events ==="
-          kubectl -n vms get events --sort-by=.lastTimestamp | tail -40 || true
-
       - name: Verify rollout
         if: ${{ !inputs.dry_run }}
         run: |
           echo "Deployed tag: ${{ steps.tag.outputs.tag }}"
           kubectl -n vms rollout status deploy/api-gateway --timeout=120s
           kubectl -n vms get pods -o wide
+
+      - name: Dump diagnostics on failure
+        if: ${{ failure() && !inputs.dry_run }}
+        run: |
+          echo "=== pods ==="
+          kubectl -n vms get pods -o wide || true
+          echo "=== non-running pods (describe tail + recent logs) ==="
+          for p in $(kubectl -n vms get pods --no-headers 2>/dev/null | grep -v Running | awk '{print $1}'); do
+            echo "----- $p -----"
+            kubectl -n vms describe pod "$p" | tail -20 || true
+            kubectl -n vms logs "$p" --all-containers --tail=30 2>/dev/null || true
+          done
+          echo "=== recent events ==="
+          kubectl -n vms get events --sort-by=.lastTimestamp | tail -40 || true
