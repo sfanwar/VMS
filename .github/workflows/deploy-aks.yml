@@ -45,7 +45,7 @@ jobs:
       packages: read           # allow reading GHCR packages
       id-token: write          # required for Azure OIDC federated login
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Compute lowercase image repository
         id: img
